@@ -1,4 +1,5 @@
 import { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import http from 'http';
 
 const BAOZI_API = 'https://baozi.bet';
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN!;
@@ -412,6 +413,14 @@ setInterval(async () => {
     }
   }
 }, 60000);
+
+
+// ─── Health Check HTTP Server (for Render Web Service free tier) ───
+const PORT = parseInt(process.env.PORT || '10000');
+http.createServer((_req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: 'ok', service: 'baozi-discord-bot', uptime: process.uptime() }));
+}).listen(PORT, () => console.log(`   Health check: http://0.0.0.0:${PORT}`));
 
 client.login(BOT_TOKEN);
 console.log('\ud83e\udd5f Baozi Discord Bot starting...');

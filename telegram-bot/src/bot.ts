@@ -1,4 +1,5 @@
 import TelegramBot from 'node-telegram-bot-api';
+import http from 'http';
 
 const BAOZI_API = 'https://baozi.bet';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
@@ -512,6 +513,14 @@ async function pollAll() {
 setInterval(pollAll, POLL_INTERVAL);
 
 // ═══════════════════════════════════════════════════════════════
+
+
+// ─── Health Check HTTP Server (for Render Web Service free tier) ───
+const PORT = parseInt(process.env.PORT || '10000');
+http.createServer((_req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: 'ok', service: 'baozi-telegram-bot', uptime: process.uptime() }));
+}).listen(PORT, () => console.log(`   Health check: http://0.0.0.0:${PORT}`));
 
 console.log('🥟 Baozi Unified Bot running (Markets + Alerts)');
 console.log(`   API: ${BAOZI_API}/api/markets`);

@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: baozi-telegram-bot
     runtime: node
     buildCommand: cd telegram-bot && npm install && npm run build
