@@ -1,0 +1,26 @@
+services:
+  # Unified Telegram Bot (Market Feed #9 + Claim Alert #11)
+  - type: worker
+    name: baozi-telegram-bot
+    runtime: node
+    rootDir: telegram-bot
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: POLL_INTERVAL_MINUTES
+        value: "15"
+
+  # Discord Market Bot (#10)
+  - type: worker
+    name: baozi-discord-bot
+    runtime: node
+    rootDir: discord-bot
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        value: "1473800419825156211"
