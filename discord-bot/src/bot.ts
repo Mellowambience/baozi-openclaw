@@ -15,7 +15,7 @@ async function fetchAllMarkets(): Promise<any[]> {
   if (Date.now() - _lastFetch < _CACHE_TTL && _marketCache.length > 0) return _marketCache;
   const res = await fetch(`${BAOZI_API}/api/markets`, { headers: { 'User-Agent': 'BaoziDiscordBot/1.0' } });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
-  const json = await res.json();
+  const json = await res.json() as any;
   _marketCache = [...(json?.data?.binary || []), ...(json?.data?.race || [])];
   _lastFetch = Date.now();
   return _marketCache;
