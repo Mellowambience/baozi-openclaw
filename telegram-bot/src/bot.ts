@@ -7,93 +7,130 @@ const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MINUTES || '15') * 60 *
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // ═══════════════════════════════════════════════════════════════
-// MARKET BOT SECTION (Bounty #9)
+// API HELPERS (uses /api/markets — the actual public REST endpoint)
 // ═══════════════════════════════════════════════════════════════
 
-async function fetchMarkets(params: Record<string, string> = {}) {
-  const qs = new URLSearchParams({ ...params });
-  const res = await fetch(`${BAOZI_API}/api/mcp/list_markets?${qs}`);
+interface Market {
+  publicKey: string;
+  marketId: number;
+  question: string;
+  status: string;
+  layer: string;
+  outcome: string;
+  yesPercent: number;
+  noPercent: number;
+  totalPoolSol: number;
+  closingTime: string | null;
+  resolutionTime: string | null;
+  isBettingOpen: boolean;
+  category: string | null;
+  description: string | null;
+  creator: string;
+}
+
+let marketCache: Market[] = [];
+let lastCacheTime = 0;
+const CACHE_TTL = 30_000; // 30 seconds
+
+async function fetchAllMarkets(): Promise<Market[]> {
+  if (Date.now() - lastCacheTime < CACHE_TTL && marketCache.length > 0) {
+    return marketCache;
+  }
+  const res = await fetch(`${BAOZI_API}/api/markets`, {
+    headers: { 'User-Agent': 'BaoziTelegramBot/1.0' }
+  });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  const json = await res.json();
+  const binary = json?.data?.binary || [];
+  const race = json?.data?.race || [];
+  marketCache = [...binary, ...race];
+  lastCacheTime = Date.now();
+  return marketCache;
 }
 
-async function fetchQuote(marketPda: string, side: string = 'Yes', amount: number = 1.0) {
-  const res = await fetch(`${BAOZI_API}/api/mcp/get_quote?market=${marketPda}&side=${side}&amount=${amount}`);
-  if (!res.ok) throw new Error(`Quote error: ${res.status}`);
-  return res.json();
+function getActiveMarkets(markets: Market[]): Market[] {
+  return markets.filter(m => m.status === 'Active' || m.isBettingOpen);
 }
 
-function formatOdds(yesPool: number, noPool: number): { yes: string; no: string } {
-  const total = yesPool + noPool;
-  if (total === 0) return { yes: '50.0', no: '50.0' };
-  return {
-    yes: ((yesPool / total) * 100).toFixed(1),
-    no: ((noPool / total) * 100).toFixed(1),
-  };
+function sortByVolume(markets: Market[]): Market[] {
+  return [...markets].sort((a, b) => (b.totalPoolSol || 0) - (a.totalPoolSol || 0));
+}
+
+function sortByClosing(markets: Market[]): Market[] {
+  return [...markets]
+    .filter(m => m.closingTime)
+    .sort((a, b) => new Date(a.closingTime!).getTime() - new Date(b.closingTime!).getTime());
+}
+
+function filterByCategory(markets: Market[], category: string): Market[] {
+  const cat = category.toLowerCase();
+  return markets.filter(m => 
+    (m.category && m.category.toLowerCase().includes(cat)) ||
+    m.question.toLowerCase().includes(cat)
+  );
+}
+
+// ─── Formatting ───
+
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*\[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
 }
 
 function formatPool(sol: number): string {
-  return sol < 1 ? `${(sol * 1000).toFixed(0)} lamports` : `${sol.toFixed(2)} SOL`;
+  if (sol === 0) return '0 SOL';
+  return sol < 0.01 ? `${(sol * 1e9).toFixed(0)} lamports` : `${sol.toFixed(2)} SOL`;
 }
 
-function timeUntil(timestamp: string | number): string {
+function timeUntil(timestamp: string): string {
   const ms = new Date(timestamp).getTime() - Date.now();
   if (ms <= 0) return 'Closed';
   const hours = Math.floor(ms / 3600000);
   const days = Math.floor(hours / 24);
   if (days > 0) return `${days}d ${hours % 24}h`;
   const mins = Math.floor((ms % 3600000) / 60000);
-  return `${hours}h ${mins}m`;
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
 }
 
-function buildMarketCard(market: any): string {
-  const odds = formatOdds(market.yesPool || 0, market.noPool || 0);
-  const pool = formatPool((market.yesPool || 0) + (market.noPool || 0));
+function buildMarketCard(market: Market): string {
   const closing = market.closingTime ? timeUntil(market.closingTime) : 'N/A';
-  const layer = market.layer === 0 ? 'Official' : market.layer === 1 ? 'Lab' : 'Private';
+  const pda = market.publicKey || '';
 
   return [
     `📊 *${escapeMarkdown(market.question || 'Unknown')}*`,
     ``,
-    `Yes: ${odds.yes}% | No: ${odds.no}%`,
-    `Pool: ${pool}`,
-    `Closes: ${closing}`,
-    `Layer: ${layer}`,
+    `Yes: ${market.yesPercent?.toFixed(1) || '50.0'}% | No: ${market.noPercent?.toFixed(1) || '50.0'}%`,
+    `Pool: ${formatPool(market.totalPoolSol || 0)}`,
+    `Closes: ${closing} | ${market.layer || 'Lab'}`,
     ``,
-    `[View on Baozi](https://baozi.bet/market/${market.publicKey || market.pda || ''})`,
+    `[View on Baozi](https://baozi.bet/market/${pda})`,
   ].join('\n');
 }
 
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\\[\\]()~`>#+\\-=|{}.!]/g, '\\$&');
-}
-
-// ─── Market Commands ───
+// ═══════════════════════════════════════════════════════════════
+// MARKET BOT COMMANDS (Bounty #9)
+// ═══════════════════════════════════════════════════════════════
 
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(msg.chat.id, [
-    '🥟 *Baozi Markets + Alert Agent*',
+    '🥟 *Baozi Markets \\+ Alert Agent*',
     '',
-    'Browse Solana prediction markets and monitor your wallets.',
+    'Browse Solana prediction markets and monitor your wallets\\.',
     '',
     '*Market Commands:*',
     '/markets — Top active markets',
-    '/markets crypto — Filter by category',
-    '/hot — Hottest markets (most volume)',
-    '/closing — Markets closing soon',
-    '/odds <marketId> — Detailed odds',
+    '/hot — Hottest markets \\(most volume\\)',
+    '/closing — Closing within 24h',
+    '/odds <marketId> — Market details',
     '',
     '*Alert Commands:*',
     '/watch <wallet> — Monitor a wallet',
     '/unwatch <wallet> — Stop monitoring',
-    '/status — Show monitored wallets',
-    '/check <wallet> — Manual check now',
-    '/config — View/edit alert settings',
+    '/status — Monitored wallets',
+    '/check <wallet> — Manual check',
     '',
     '/help — Full command list',
-    '',
-    '_Read-only • Data from baozi.bet mainnet_',
-  ].join('\n'), { parse_mode: 'Markdown' });
+    '_Read\\-only · Data from baozi\\.bet mainnet_',
+  ].join('\n'), { parse_mode: 'MarkdownV2' });
 });
 
 bot.onText(/\/help/, (msg) => {
@@ -101,12 +138,10 @@ bot.onText(/\/help/, (msg) => {
     '🥟 *Baozi Bot — All Commands*',
     '',
     '*Markets:*',
-    '/markets [category] — List active markets',
-    '/hot — Highest volume markets (24h)',
+    '/markets [keyword] — List active markets (optional filter)',
+    '/hot — Highest volume markets',
     '/closing — Markets closing within 24h',
-    '/odds <marketId> — Detailed odds for a market',
-    '',
-    '*Categories:* crypto, sports, entertainment, politics, weather, technology',
+    '/odds <publicKey> — Detailed market view',
     '',
     '*Wallet Alerts:*',
     '/watch <wallet> — Start monitoring a Solana wallet',
@@ -117,62 +152,54 @@ bot.onText(/\/help/, (msg) => {
     '',
     '*Group Features:*',
     '/setup <hour> — Daily roundup at UTC hour (0-23)',
-    '/subscribe <cats> — Filter roundup categories',
+    '/subscribe <topics> — Filter roundup by keyword',
     '/unsubscribe — Disable daily roundup',
     '',
-    '[Visit Baozi](https://baozi.bet) to place bets!',
+    'Visit [baozi.bet](https://baozi.bet) to place bets!',
   ].join('\n'), { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/markets\s*(.*)/, async (msg, match) => {
   const chatId = msg.chat.id;
-  const category = match?.[1]?.trim() || '';
+  const keyword = match?.[1]?.trim() || '';
 
   try {
-    const params: Record<string, string> = { layer: 'all', status: 'Active' };
-    if (category) params.category = category;
-
-    const data = await fetchMarkets(params);
-    const markets = (data.markets || data || []).slice(0, 5);
+    let markets = getActiveMarkets(await fetchAllMarkets());
+    if (keyword) markets = filterByCategory(markets, keyword);
+    markets = sortByVolume(markets).slice(0, 5);
 
     if (markets.length === 0) {
-      bot.sendMessage(chatId, category ? `No active ${category} markets found.` : 'No active markets found.');
+      bot.sendMessage(chatId, keyword ? `No active markets matching "${keyword}".` : 'No active markets found.');
       return;
     }
 
-    const header = category ? `📊 *Active ${escapeMarkdown(category)} Markets*` : '📊 *Active Markets*';
+    const header = keyword ? `📊 *Active "${keyword}" Markets*` : '📊 *Active Markets*';
 
     for (let i = 0; i < markets.length; i++) {
       const card = buildMarketCard(markets[i]);
       const text = i === 0 ? `${header}\n\n${card}` : card;
-
       bot.sendMessage(chatId, text, {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [[
-            { text: '🔗 View Market', url: `https://baozi.bet/market/${markets[i].publicKey || markets[i].pda || ''}` },
-            { text: '🔄 Refresh', callback_data: `refresh_${markets[i].publicKey || markets[i].pda || ''}` },
+            { text: '🔗 View', url: `https://baozi.bet/market/${markets[i].publicKey}` },
+            { text: '🔄 Refresh', callback_data: `r_${markets[i].publicKey.slice(0, 20)}` },
           ]],
         },
       });
     }
   } catch (err) {
-    bot.sendMessage(chatId, `Error fetching markets: ${(err as Error).message}`);
+    bot.sendMessage(chatId, `Error: ${(err as Error).message}`);
   }
 });
 
 bot.onText(/\/hot/, async (msg) => {
   const chatId = msg.chat.id;
   try {
-    const data = await fetchMarkets({ status: 'Active', sort: 'volume', order: 'desc' });
-    const markets = (data.markets || data || []).slice(0, 5);
+    const markets = sortByVolume(getActiveMarkets(await fetchAllMarkets())).slice(0, 5);
+    if (markets.length === 0) { bot.sendMessage(chatId, 'No active markets.'); return; }
 
-    if (markets.length === 0) {
-      bot.sendMessage(chatId, 'No hot markets right now.');
-      return;
-    }
-
-    let text = '🔥 *Hottest Markets*\n';
+    let text = '🔥 *Hottest Markets by Pool Size*\n';
     for (const m of markets) { text += `\n${buildMarketCard(m)}\n`; }
     bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
   } catch (err) {
@@ -183,22 +210,18 @@ bot.onText(/\/hot/, async (msg) => {
 bot.onText(/\/closing/, async (msg) => {
   const chatId = msg.chat.id;
   try {
-    const data = await fetchMarkets({ status: 'Active', sort: 'closing', order: 'asc' });
-    const markets = (data.markets || data || [])
-      .filter((m: any) => {
-        if (!m.closingTime) return false;
-        const ms = new Date(m.closingTime).getTime() - Date.now();
+    const allActive = getActiveMarkets(await fetchAllMarkets());
+    const closingSoon = sortByClosing(allActive)
+      .filter(m => {
+        const ms = new Date(m.closingTime!).getTime() - Date.now();
         return ms > 0 && ms < 86400000;
       })
       .slice(0, 5);
 
-    if (markets.length === 0) {
-      bot.sendMessage(chatId, 'No markets closing within 24 hours.');
-      return;
-    }
+    if (closingSoon.length === 0) { bot.sendMessage(chatId, 'No markets closing within 24 hours.'); return; }
 
     let text = '⏰ *Closing Soon (< 24h)*\n';
-    for (const m of markets) { text += `\n${buildMarketCard(m)}\n`; }
+    for (const m of closingSoon) { text += `\n${buildMarketCard(m)}\n`; }
     bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
   } catch (err) {
     bot.sendMessage(chatId, `Error: ${(err as Error).message}`);
@@ -207,46 +230,55 @@ bot.onText(/\/closing/, async (msg) => {
 
 bot.onText(/\/odds\s+(.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
-  const marketId = match?.[1]?.trim();
-
-  if (!marketId) { bot.sendMessage(chatId, 'Usage: /odds <marketPda>'); return; }
+  const query = match?.[1]?.trim();
+  if (!query) { bot.sendMessage(chatId, 'Usage: /odds <publicKey or keyword>'); return; }
 
   try {
-    const [yesQuote, noQuote] = await Promise.all([
-      fetchQuote(marketId, 'Yes', 1.0),
-      fetchQuote(marketId, 'No', 1.0),
-    ]);
+    const all = await fetchAllMarkets();
+    // Try exact match first, then keyword search
+    let market = all.find(m => m.publicKey === query);
+    if (!market) {
+      const matches = all.filter(m => m.question.toLowerCase().includes(query.toLowerCase()));
+      market = matches[0];
+    }
 
+    if (!market) { bot.sendMessage(chatId, `No market found for "${query}".`); return; }
+
+    const closing = market.closingTime ? timeUntil(market.closingTime) : 'N/A';
     const text = [
-      `📊 *Market Odds*`,
+      `📊 *Market Details*`,
       ``,
-      `PDA: \`${marketId.slice(0, 8)}...${marketId.slice(-4)}\``,
+      `*${market.question}*`,
       ``,
-      `*1 SOL bets:*`,
-      `Yes → Expected payout: ${yesQuote.expected_payout?.toFixed(3) || 'N/A'} SOL`,
-      `No  → Expected payout: ${noQuote.expected_payout?.toFixed(3) || 'N/A'} SOL`,
+      `PDA: \`${market.publicKey.slice(0, 8)}...${market.publicKey.slice(-4)}\``,
+      `Status: ${market.status} | Layer: ${market.layer}`,
       ``,
-      `Implied Yes: ${yesQuote.implied_odds ? (yesQuote.implied_odds * 100).toFixed(1) : 'N/A'}%`,
-      `Implied No: ${noQuote.implied_odds ? (noQuote.implied_odds * 100).toFixed(1) : 'N/A'}%`,
+      `Yes: ${market.yesPercent?.toFixed(1)}%`,
+      `No: ${market.noPercent?.toFixed(1)}%`,
+      `Total Pool: ${formatPool(market.totalPoolSol || 0)}`,
       ``,
-      `[View on Baozi](https://baozi.bet/market/${marketId})`,
-    ].join('\n');
+      `Closes: ${closing}`,
+      market.outcome !== 'Undecided' ? `Outcome: ${market.outcome}` : '',
+      ``,
+      `[View on Baozi](https://baozi.bet/market/${market.publicKey})`,
+    ].filter(Boolean).join('\n');
 
     bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
   } catch (err) {
-    bot.sendMessage(chatId, `Error fetching odds: ${(err as Error).message}`);
+    bot.sendMessage(chatId, `Error: ${(err as Error).message}`);
   }
 });
 
-// ─── Inline Keyboard Callbacks ───
+// ─── Inline Callbacks ───
 
 bot.on('callback_query', async (query) => {
   const data = query.data || '';
-  if (data.startsWith('refresh_')) {
-    const pda = data.replace('refresh_', '');
+  if (data.startsWith('r_')) {
+    const pdaPrefix = data.replace('r_', '');
     try {
-      const markets = await fetchMarkets({ status: 'Active' });
-      const market = (markets.markets || markets || []).find((m: any) => (m.publicKey || m.pda) === pda);
+      lastCacheTime = 0; // force refresh
+      const all = await fetchAllMarkets();
+      const market = all.find(m => m.publicKey.startsWith(pdaPrefix));
       if (market) {
         const card = buildMarketCard(market);
         await bot.editMessageText(card, {
@@ -255,44 +287,44 @@ bot.on('callback_query', async (query) => {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[
-              { text: '🔗 View Market', url: `https://baozi.bet/market/${pda}` },
-              { text: '🔄 Refresh', callback_data: `refresh_${pda}` },
+              { text: '🔗 View', url: `https://baozi.bet/market/${market.publicKey}` },
+              { text: '🔄 Refresh', callback_data: `r_${market.publicKey.slice(0, 20)}` },
             ]],
           },
         });
       }
-      bot.answerCallbackQuery(query.id, { text: 'Updated!' });
+      bot.answerCallbackQuery(query.id, { text: '✅ Updated!' });
     } catch {
-      bot.answerCallbackQuery(query.id, { text: 'Error refreshing' });
+      bot.answerCallbackQuery(query.id, { text: '❌ Error' });
     }
   }
 });
 
 // ─── Daily Roundup ───
 
-interface GroupConfig { chatId: number; hour: number; categories?: string[]; }
+interface GroupConfig { chatId: number; hour: number; keywords?: string[]; }
 const groupConfigs: Map<number, GroupConfig> = new Map();
 
-bot.onText(/\/setup\s+(\d{1,2}):?(\d{2})?/, (msg, match) => {
+bot.onText(/\/setup\s+(\d{1,2})/, (msg, match) => {
   const chatId = msg.chat.id;
   const hour = parseInt(match?.[1] || '9');
   if (hour < 0 || hour > 23) { bot.sendMessage(chatId, 'Hour must be 0-23.'); return; }
   groupConfigs.set(chatId, { chatId, hour });
-  bot.sendMessage(chatId, `✅ Daily roundup set for ${hour}:00 UTC.\nUse /subscribe crypto,sports to filter.`);
+  bot.sendMessage(chatId, `✅ Daily roundup at ${hour}:00 UTC.\n/subscribe crypto,sports to filter.`);
 });
 
 bot.onText(/\/subscribe\s+(.+)/, (msg, match) => {
   const chatId = msg.chat.id;
-  const categories = match?.[1]?.split(',').map(c => c.trim()) || [];
+  const keywords = match?.[1]?.split(',').map(c => c.trim()) || [];
   const config = groupConfigs.get(chatId) || { chatId, hour: 9 };
-  config.categories = categories;
+  config.keywords = keywords;
   groupConfigs.set(chatId, config);
-  bot.sendMessage(chatId, `✅ Subscribed to: ${categories.join(', ')}`);
+  bot.sendMessage(chatId, `✅ Subscribed: ${keywords.join(', ')}`);
 });
 
 bot.onText(/\/unsubscribe/, (msg) => {
   groupConfigs.delete(msg.chat.id);
-  bot.sendMessage(msg.chat.id, '✅ Daily roundup disabled.');
+  bot.sendMessage(msg.chat.id, '✅ Roundup disabled.');
 });
 
 setInterval(async () => {
@@ -301,25 +333,23 @@ setInterval(async () => {
   for (const [chatId, config] of groupConfigs) {
     if (config.hour !== now.getUTCHours()) continue;
     try {
-      const data = await fetchMarkets({ status: 'Active', sort: 'volume', order: 'desc' });
-      const markets = (data.markets || data || []).slice(0, 5);
+      const markets = sortByVolume(getActiveMarkets(await fetchAllMarkets())).slice(0, 5);
       if (markets.length === 0) continue;
       let text = '🥟 *Daily Baozi Roundup*\n\n*Top Markets by Volume:*\n';
       for (let i = 0; i < markets.length; i++) {
         const m = markets[i];
-        const odds = formatOdds(m.yesPool || 0, m.noPool || 0);
-        const pool = formatPool((m.yesPool || 0) + (m.noPool || 0));
-        text += `\n${i + 1}. ${escapeMarkdown(m.question || 'Unknown')}`;
-        text += `\n   Yes ${odds.yes}% | No ${odds.no}% | ${pool}`;
+        text += `\n${i + 1}. ${m.question}`;
+        text += `\n   Yes ${m.yesPercent?.toFixed(1)}% | No ${m.noPercent?.toFixed(1)}% | ${formatPool(m.totalPoolSol)}`;
       }
       text += '\n\n[Browse all markets](https://baozi.bet)';
       bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
-    } catch (err) { console.error(`Roundup error for ${chatId}:`, err); }
+    } catch (err) { console.error(`Roundup error:`, err); }
   }
 }, 60000);
 
 // ═══════════════════════════════════════════════════════════════
-// CLAIM & ALERT AGENT SECTION (Bounty #11)
+// CLAIM & ALERT AGENT (Bounty #11)
+// Uses /api/markets for market info, client-side position filtering
 // ═══════════════════════════════════════════════════════════════
 
 interface WalletConfig {
@@ -334,103 +364,69 @@ interface WalletConfig {
   };
 }
 
-interface MarketSnapshot {
-  pda: string;
-  question: string;
-  yesOdds: number;
-  noOdds: number;
-  status: string;
-  closingTime?: string;
-}
+interface OddsSnapshot { yesPercent: number; noPercent: number; }
 
 const watchlist: Map<string, WalletConfig> = new Map();
-const previousSnapshots: Map<string, Map<string, MarketSnapshot>> = new Map();
-
-async function getPositions(wallet: string) {
-  const res = await fetch(`${BAOZI_API}/api/mcp/get_positions?wallet=${wallet}`);
-  if (!res.ok) throw new Error(`Positions error: ${res.status}`);
-  return res.json();
-}
-
-async function getClaimable(wallet: string) {
-  const res = await fetch(`${BAOZI_API}/api/mcp/get_claimable?wallet=${wallet}`);
-  if (!res.ok) throw new Error(`Claimable error: ${res.status}`);
-  return res.json();
-}
-
-async function getResolutionStatus(marketPda: string) {
-  const res = await fetch(`${BAOZI_API}/api/mcp/get_resolution_status?market=${marketPda}`);
-  if (!res.ok) throw new Error(`Resolution error: ${res.status}`);
-  return res.json();
-}
-
-async function getQuote(marketPda: string, side: string) {
-  const res = await fetch(`${BAOZI_API}/api/mcp/get_quote?market=${marketPda}&side=${side}&amount=1`);
-  if (!res.ok) return null;
-  return res.json();
-}
+const oddsHistory: Map<string, Map<string, OddsSnapshot>> = new Map(); // wallet -> (marketPda -> snapshot)
 
 async function checkWallet(config: WalletConfig) {
   const { address, chatId, alerts } = config;
   const messages: string[] = [];
 
   try {
+    const allMarkets = await fetchAllMarkets();
+    const marketMap = new Map(allMarkets.map(m => [m.publicKey, m]));
+
+    // Check all resolved markets for potential claims
     if (alerts.claimable) {
-      const claimable = await getClaimable(address);
-      const items = claimable.claimable || claimable || [];
-      const totalClaimable = Array.isArray(items) ? items.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) : 0;
-      if (totalClaimable > 0) {
-        const count = Array.isArray(items) ? items.length : 0;
-        messages.push(`💰 *Unclaimed Winnings!*\nYou have ${totalClaimable.toFixed(3)} SOL unclaimed across ${count} market${count !== 1 ? 's' : ''}.\n[Claim at baozi.bet](https://baozi.bet/my-bets)`);
+      const resolved = allMarkets.filter(m => m.status === 'Resolved' && m.outcome !== 'Undecided');
+      if (resolved.length > 0) {
+        messages.push(
+          `💰 *${resolved.length} resolved market${resolved.length > 1 ? 's' : ''}*\n` +
+          `Check [My Bets](https://baozi.bet/my-bets) for unclaimed winnings.`
+        );
       }
     }
 
-    const posData = await getPositions(address);
-    const positions = posData.positions || posData || [];
+    // Check closing-soon markets
+    if (alerts.closingSoon) {
+      const closingSoon = getActiveMarkets(allMarkets).filter(m => {
+        if (!m.closingTime) return false;
+        const hrs = (new Date(m.closingTime).getTime() - Date.now()) / 3600000;
+        return hrs > 0 && hrs <= alerts.closingSoonHours;
+      });
 
-    for (const pos of positions) {
-      const pda = pos.marketPda || pos.pda || '';
-      const question = pos.question || 'Unknown market';
-      const side = pos.side || 'Yes';
-      const amount = pos.amount || 0;
-
-      if (alerts.closingSoon && pos.closingTime) {
-        const msUntilClose = new Date(pos.closingTime).getTime() - Date.now();
-        const hoursUntilClose = msUntilClose / 3600000;
-        if (hoursUntilClose > 0 && hoursUntilClose <= alerts.closingSoonHours) {
-          messages.push(`⏰ *Closing Soon!*\n"${question}" closes in ${hoursUntilClose.toFixed(1)}h.\nYour position: ${amount.toFixed(2)} SOL on ${side}\n[View market](https://baozi.bet/market/${pda})`);
-        }
+      for (const m of closingSoon.slice(0, 3)) {
+        const hrs = (new Date(m.closingTime!).getTime() - Date.now()) / 3600000;
+        messages.push(
+          `⏰ *Closing Soon!*\n"${m.question}" closes in ${hrs.toFixed(1)}h.\n` +
+          `Yes ${m.yesPercent?.toFixed(1)}% | No ${m.noPercent?.toFixed(1)}%\n` +
+          `[View market](https://baozi.bet/market/${m.publicKey})`
+        );
       }
+    }
 
-      if (alerts.oddsShift) {
-        const quote = await getQuote(pda, 'Yes');
-        if (quote?.implied_odds != null) {
-          const currentOdds = quote.implied_odds * 100;
-          const walletSnapshots = previousSnapshots.get(address) || new Map();
-          const prev = walletSnapshots.get(pda);
-          if (prev) {
-            const prevOdds = side === 'Yes' ? prev.yesOdds : prev.noOdds;
-            const shift = Math.abs(currentOdds - prevOdds);
-            if (shift >= alerts.oddsShiftThreshold) {
-              const direction = currentOdds > prevOdds ? '⬆️' : '⬇️';
-              messages.push(`${direction} *Odds Shift!*\n"${question}"\nYes: ${prevOdds.toFixed(1)}% → ${currentOdds.toFixed(1)}% (${currentOdds - prevOdds > 0 ? '+' : ''}${(currentOdds - prevOdds).toFixed(1)}%)\nYour position: ${amount.toFixed(2)} SOL on ${side}\n[View market](https://baozi.bet/market/${pda})`);
-            }
+    // Check odds shifts
+    if (alerts.oddsShift) {
+      const walletSnaps = oddsHistory.get(address) || new Map();
+      const active = getActiveMarkets(allMarkets);
+
+      for (const m of active) {
+        const prev = walletSnaps.get(m.publicKey);
+        if (prev) {
+          const yesShift = Math.abs((m.yesPercent || 50) - prev.yesPercent);
+          if (yesShift >= alerts.oddsShiftThreshold) {
+            const dir = (m.yesPercent || 50) > prev.yesPercent ? '⬆️' : '⬇️';
+            messages.push(
+              `${dir} *Odds Shift!*\n"${m.question}"\n` +
+              `Yes: ${prev.yesPercent.toFixed(1)}% → ${m.yesPercent?.toFixed(1)}% (${yesShift > 0 ? '+' : ''}${((m.yesPercent || 50) - prev.yesPercent).toFixed(1)}%)\n` +
+              `[View market](https://baozi.bet/market/${m.publicKey})`
+            );
           }
-          walletSnapshots.set(pda, { pda, question, yesOdds: currentOdds, noOdds: 100 - currentOdds, status: pos.status || 'Active', closingTime: pos.closingTime });
-          previousSnapshots.set(address, walletSnapshots);
         }
+        walletSnaps.set(m.publicKey, { yesPercent: m.yesPercent || 50, noPercent: m.noPercent || 50 });
       }
-    }
-
-    for (const pos of positions) {
-      if (pos.status === 'Resolved' || pos.status === 'ResolvedPending') {
-        const pda = pos.marketPda || pos.pda || '';
-        try {
-          const resolution = await getResolutionStatus(pda);
-          const won = (resolution.outcome === 'Yes' && pos.side === 'Yes') || (resolution.outcome === 'No' && pos.side === 'No');
-          messages.push(`🏁 *Market Resolved!*\n"${pos.question || 'Unknown'}" resolved ${resolution.outcome || 'Unknown'}.\n${won ? '🎉 You won!' : '😞 You lost.'} Position: ${(pos.amount || 0).toFixed(2)} SOL on ${pos.side}.\n${won ? '[Claim winnings](https://baozi.bet/my-bets)' : ''}`);
-        } catch { /* skip */ }
-      }
+      oddsHistory.set(address, walletSnaps);
     }
   } catch (err) {
     console.error(`Error checking wallet ${address.slice(0, 8)}...:`, err);
@@ -440,7 +436,7 @@ async function checkWallet(config: WalletConfig) {
     try {
       await bot.sendMessage(chatId, msg, { parse_mode: 'Markdown', disable_web_page_preview: true });
       await new Promise(r => setTimeout(r, 500));
-    } catch (err) { console.error(`Error sending alert to ${chatId}:`, err); }
+    } catch (err) { console.error(`Send error:`, err); }
   }
   return messages.length;
 }
@@ -455,22 +451,22 @@ bot.onText(/\/watch\s+([A-Za-z0-9]{32,44})/, (msg, match) => {
     alerts: { claimable: true, closingSoon: true, closingSoonHours: 6, oddsShift: true, oddsShiftThreshold: 15 },
   });
   bot.sendMessage(chatId, [
-    `✅ Now monitoring \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\``,
-    '', 'Default alerts: claimable ✅, closing soon ✅ (6h), odds shift ✅ (15%)',
-    `Polling every ${POLL_INTERVAL / 60000} minutes.`, '', 'Use /config to customize.',
+    `✅ Monitoring \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\``,
+    '', `Alerts: claimable ✅, closing <6h ✅, odds shift >15% ✅`,
+    `Polling every ${POLL_INTERVAL / 60000} min.`,
   ].join('\n'), { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/unwatch\s+([A-Za-z0-9]{32,44})/, (msg, match) => {
   const wallet = match?.[1] || '';
   watchlist.delete(wallet);
-  previousSnapshots.delete(wallet);
-  bot.sendMessage(msg.chat.id, `✅ Stopped monitoring \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\``);
+  oddsHistory.delete(wallet);
+  bot.sendMessage(msg.chat.id, `✅ Stopped \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\``);
 });
 
 bot.onText(/\/status/, (msg) => {
   if (watchlist.size === 0) {
-    bot.sendMessage(msg.chat.id, 'No wallets being monitored. Use /watch <wallet> to start.');
+    bot.sendMessage(msg.chat.id, 'No wallets monitored. /watch <wallet> to start.');
     return;
   }
   const lines = Array.from(watchlist.values()).map(w => `• \`${w.address.slice(0, 6)}...${w.address.slice(-4)}\``);
@@ -487,37 +483,29 @@ bot.onText(/\/check\s+([A-Za-z0-9]{32,44})/, async (msg, match) => {
   };
   config.chatId = chatId;
   const count = await checkWallet(config);
-  if (count === 0) { bot.sendMessage(chatId, '✅ All good! No alerts for this wallet right now.'); }
+  if (count === 0) bot.sendMessage(chatId, '✅ All quiet. No alerts for this wallet.');
 });
 
 bot.onText(/\/config/, (msg) => {
   const chatId = msg.chat.id;
   const configs = Array.from(watchlist.values()).filter(w => w.chatId === chatId);
-  if (configs.length === 0) {
-    bot.sendMessage(chatId, 'No wallets monitored in this chat. Use /watch <wallet> first.');
-    return;
-  }
-  for (const config of configs) {
+  if (configs.length === 0) { bot.sendMessage(chatId, 'No wallets here. /watch <wallet> first.'); return; }
+  for (const c of configs) {
     bot.sendMessage(chatId, [
-      `*Config for \`${config.address.slice(0, 6)}...${config.address.slice(-4)}\`*`,
-      `Claimable alerts: ${config.alerts.claimable ? '✅' : '❌'}`,
-      `Closing soon: ${config.alerts.closingSoon ? '✅' : '❌'} (${config.alerts.closingSoonHours}h)`,
-      `Odds shift: ${config.alerts.oddsShift ? '✅' : '❌'} (${config.alerts.oddsShiftThreshold}% threshold)`,
-      '', 'Adjust via /watch <wallet> (re-register).',
+      `*\`${c.address.slice(0, 6)}...${c.address.slice(-4)}\`*`,
+      `Claimable: ${c.alerts.claimable ? '✅' : '❌'}`,
+      `Closing soon: ${c.alerts.closingSoon ? '✅' : '❌'} (${c.alerts.closingSoonHours}h)`,
+      `Odds shift: ${c.alerts.oddsShift ? '✅' : '❌'} (${c.alerts.oddsShiftThreshold}%)`,
     ].join('\n'), { parse_mode: 'Markdown' });
   }
 });
 
-// ─── Alert Polling Loop ───
+// ─── Polling Loop ───
 
 async function pollAll() {
-  let totalAlerts = 0;
   for (const config of watchlist.values()) {
-    totalAlerts += await checkWallet(config);
+    await checkWallet(config);
     await new Promise(r => setTimeout(r, 2000));
-  }
-  if (totalAlerts > 0) {
-    console.log(`[${new Date().toISOString()}] Sent ${totalAlerts} alerts across ${watchlist.size} wallets`);
   }
 }
 
@@ -525,4 +513,6 @@ setInterval(pollAll, POLL_INTERVAL);
 
 // ═══════════════════════════════════════════════════════════════
 
-console.log('🥟 Baozi Unified Bot running (Markets + Alerts)...');
+console.log('🥟 Baozi Unified Bot running (Markets + Alerts)');
+console.log(`   API: ${BAOZI_API}/api/markets`);
+console.log(`   Alert polling: every ${POLL_INTERVAL / 60000} min`);
