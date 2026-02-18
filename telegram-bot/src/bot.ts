@@ -41,7 +41,7 @@ async function fetchAllMarkets(): Promise<Market[]> {
     headers: { 'User-Agent': 'BaoziTelegramBot/1.0' }
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
-  const json = await res.json();
+  const json = await res.json() as any;
   const binary = json?.data?.binary || [];
   const race = json?.data?.race || [];
   marketCache = [...binary, ...race];
