@@ -6,23 +6,50 @@ const CLIENT_ID = process.env.DISCORD_CLIENT_ID!;
 
 // ─── API Helpers ───
 
-async function fetchMarkets(params: Record<string, string> = {}) {
-  const qs = new URLSearchParams(params);
-  const res = await fetch(`${BAOZI_API}/api/mcp/list_markets?${qs}`);
+let _marketCache: any[] = [];
+let _lastFetch = 0;
+const _CACHE_TTL = 30000;
+
+async function fetchAllMarkets(): Promise<any[]> {
+  if (Date.now() - _lastFetch < _CACHE_TTL && _marketCache.length > 0) return _marketCache;
+  const res = await fetch(`${BAOZI_API}/api/markets`, { headers: { 'User-Agent': 'BaoziDiscordBot/1.0' } });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  const json = await res.json();
+  _marketCache = [...(json?.data?.binary || []), ...(json?.data?.race || [])];
+  _lastFetch = Date.now();
+  return _marketCache;
+}
+
+async function fetchMarkets(params: Record<string, string> = {}) {
+  let markets = await fetchAllMarkets();
+  if (params.status === 'Active') markets = markets.filter(m => m.status === 'Active' || m.isBettingOpen);
+  if (params.sort === 'volume') markets.sort((a: any, b: any) => (b.totalPoolSol || 0) - (a.totalPoolSol || 0));
+  if (params.sort === 'closing') markets.sort((a: any, b: any) => new Date(a.closingTime || '2099').getTime() - new Date(b.closingTime || '2099').getTime());
+  if (params.category) {
+    const cat = params.category.toLowerCase();
+    markets = markets.filter((m: any) => (m.category?.toLowerCase().includes(cat)) || m.question.toLowerCase().includes(cat));
+  }
+  return { markets };
 }
 
 async function fetchQuote(marketPda: string, side: string = 'Yes', amount: number = 1.0) {
-  const res = await fetch(`${BAOZI_API}/api/mcp/get_quote?market=${marketPda}&side=${side}&amount=${amount}`);
-  if (!res.ok) throw new Error(`Quote error: ${res.status}`);
-  return res.json();
+  const markets = await fetchAllMarkets();
+  const market = markets.find((m: any) => m.publicKey === marketPda);
+  if (!market) throw new Error('Market not found');
+  const yesOdds = (market.yesPercent || 50) / 100;
+  const noOdds = (market.noPercent || 50) / 100;
+  const odds = side === 'Yes' ? yesOdds : noOdds;
+  return {
+    implied_odds: odds,
+    expected_payout: odds > 0 ? amount / odds : 0,
+    pool: market.totalPoolSol || 0,
+  };
 }
 
 async function fetchPositions(wallet: string) {
-  const res = await fetch(`${BAOZI_API}/api/mcp/get_positions?wallet=${wallet}`);
-  if (!res.ok) throw new Error(`Positions error: ${res.status}`);
-  return res.json();
+  // Position data requires on-chain lookup; return empty for now
+  // Users should check baozi.bet/my-bets directly
+  return { positions: [] };
 }
 
 function formatOdds(yesPool: number, noPool: number): { yes: number; no: number } {
@@ -53,11 +80,11 @@ function formatPool(sol: number): string {
 // ─── Embed Builders ───
 
 function buildMarketEmbed(market: any): EmbedBuilder {
-  const odds = formatOdds(market.yesPool || 0, market.noPool || 0);
+  const odds = formatOdds(market.yesPercent || 50, market.noPercent || 50);
   const pool = formatPool((market.yesPool || 0) + (market.noPool || 0));
   const closing = market.closingTime ? timeUntil(market.closingTime) : 'N/A';
   const layer = market.layer === 0 ? 'Official' : market.layer === 1 ? 'Lab' : 'Private';
-  const pda = market.publicKey || market.pda || '';
+  const pda = market.publicKey || '';
 
   return new EmbedBuilder()
     .setTitle(`\ud83d\udcca ${market.question || 'Unknown Market'}`)
@@ -78,7 +105,7 @@ function buildMarketEmbed(market: any): EmbedBuilder {
 function buildRaceEmbed(market: any): EmbedBuilder {
   const outcomes = market.outcomes || [];
   const totalPool = outcomes.reduce((sum: number, o: any) => sum + (o.pool || 0), 0);
-  const pda = market.publicKey || market.pda || '';
+  const pda = market.publicKey || '';
 
   const lines = outcomes.map((o: any) => {
     const pct = totalPool > 0 ? ((o.pool || 0) / totalPool) * 100 : 0;
