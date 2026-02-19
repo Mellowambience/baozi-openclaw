@@ -16,6 +16,9 @@ export interface MarketMetadata {
   timingValid: boolean;
   timingNotes: string;
   enrichedAt: string;
+  /** v7.0 compliance */
+  v7Compliant: boolean;
+  v7Reason: string;
 }
 
 interface LLMClassification {
@@ -259,6 +262,17 @@ export async function enrichMarket(
     existingQuestions
   );
 
+  // v7.0 compliance check
+  const v7 = checkV7Compliance(market.question);
+  
+  // v7.0 non-compliant markets get quality penalty
+  if (!v7.compliant) {
+    quality.score = Math.min(quality.score, 20);
+    quality.flags.push('v7-banned');
+  } else {
+    quality.flags.push('v7-compliant');
+  }
+
   return {
     marketPda: market.publicKey,
     question: market.question,
@@ -270,7 +284,51 @@ export async function enrichMarket(
     timingValid: timing.valid,
     timingNotes: timing.notes,
     enrichedAt: new Date().toISOString(),
+    v7Compliant: v7.compliant,
+    v7Reason: v7.reason,
   };
+}
+
+// =============================================================================
+// PARIMUTUEL RULES v7.0 COMPLIANCE
+// =============================================================================
+
+/** v7.0: Price prediction markets are BANNED */
+const BANNED_PRICE_PATTERNS = [
+  /will\s+\w+\s+(?:be\s+)?(?:above|below|reach|exceed|hit|break|surpass|cross)\s+\$[\d,]+/i,
+  /(?:price|value)\s+(?:of\s+)?\w+\s+(?:above|below|over|under)/i,
+  /\$[\d,]+\s+(?:by|on|before)\s+/i,
+  /(?:bitcoin|btc|ethereum|eth|solana|sol|crypto)\s+(?:price|value)/i,
+  /(?:stock|share|equity)\s+(?:price|value)/i,
+];
+
+/** v7.0: Measurement-period markets are BANNED */
+const BANNED_MEASUREMENT_PATTERNS = [
+  /during\s+(?:this|next|the)\s+(?:week|month|quarter|year)/i,
+  /(?:weekly|monthly|quarterly|annual)\s+(?:average|total|volume)/i,
+  /what\s+will\s+\w+\s+(?:measure|read|show)\s+(?:at|on)/i,
+];
+
+/**
+ * Check v7.0 compliance for a market question.
+ * Returns { compliant, reason }.
+ */
+export function checkV7Compliance(question: string): { compliant: boolean; reason: string } {
+  const q = question.toLowerCase();
+
+  for (const pattern of BANNED_PRICE_PATTERNS) {
+    if (pattern.test(q)) {
+      return { compliant: false, reason: 'BANNED: Price prediction market (v7.0)' };
+    }
+  }
+
+  for (const pattern of BANNED_MEASUREMENT_PATTERNS) {
+    if (pattern.test(q)) {
+      return { compliant: false, reason: 'BANNED: Measurement-period market (v7.0)' };
+    }
+  }
+
+  return { compliant: true, reason: 'Event-based or general market — v7.0 compliant' };
 }
 
 export { validateTiming, calculateQuality, keywordClassify, jaccardSimilarity };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { validateTiming, calculateQuality, keywordClassify, jaccardSimilarity } from '../src/enricher';
+import { validateTiming, calculateQuality, keywordClassify, jaccardSimilarity, checkV7Compliance } from '../src/enricher';
 
 describe('Timing Validation (Pari-mutuel v6.3)', () => {
   describe('Type A (event-based)', () => {
@@ -154,5 +154,49 @@ describe('Jaccard Similarity', () => {
     const sim = jaccardSimilarity('will bitcoin reach 100k', 'will bitcoin reach 200k');
     expect(sim).toBeGreaterThan(0.5);
     expect(sim).toBeLessThan(1);
+  });
+});
+
+describe('Parimutuel Rules v7.0 Compliance', () => {
+  describe('BANNED: Price predictions', () => {
+    it('flags "Will BTC be above $100k"', () => {
+      const result = checkV7Compliance('Will BTC be above $100000 on 2026-03-15?');
+      expect(result.compliant).toBe(false);
+      expect(result.reason).toContain('BANNED');
+    });
+
+    it('flags "Will SOL reach $300"', () => {
+      const result = checkV7Compliance('Will SOL reach $300 by end of Q2?');
+      expect(result.compliant).toBe(false);
+    });
+
+    it('flags crypto price value markets', () => {
+      const result = checkV7Compliance('Will Bitcoin price exceed $150000?');
+      expect(result.compliant).toBe(false);
+    });
+  });
+
+  describe('BANNED: Measurement-period', () => {
+    it('flags "during this week" markets', () => {
+      const result = checkV7Compliance('Will average volume during this week exceed 1M?');
+      expect(result.compliant).toBe(false);
+    });
+  });
+
+  describe('ALLOWED: Event-based', () => {
+    it('allows "Will OpenAI announce GPT-5"', () => {
+      const result = checkV7Compliance('Will OpenAI announce GPT-5 by April 2026?');
+      expect(result.compliant).toBe(true);
+    });
+
+    it('allows "Who will win the BAFTA"', () => {
+      const result = checkV7Compliance('Who will win the BAFTA for Best Film?');
+      expect(result.compliant).toBe(true);
+    });
+
+    it('allows social media event markets', () => {
+      const result = checkV7Compliance('Will @elonmusk tweet about Dogecoin by March 15?');
+      expect(result.compliant).toBe(true);
+    });
   });
 });

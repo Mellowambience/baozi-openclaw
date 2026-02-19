@@ -63,6 +63,12 @@ function formatEnrichmentPost(market: Market, metadata: MarketMetadata): string 
   post += `Tags: ${metadata.tags.join(', ')}\n`;
   post += `Quality: ${metadata.qualityScore}/100\n`;
   post += `Timing: ${metadata.timingType} - ${metadata.timingValid ? 'Compliant' : 'VIOLATION'}\n`;
+  // v7.0 compliance flag
+  if (!metadata.v7Compliant) {
+    post += `\n🚫 v7.0 NON-COMPLIANT: ${metadata.v7Reason}\n`;
+  } else {
+    post += `v7.0: ✅ Compliant\n`;
+  }
   post += `Flags: ${metadata.qualityFlags.join(', ')}\n`;
   if (!metadata.timingValid) {
     post += `\n⚠️ ${metadata.timingNotes}\n`;
@@ -72,7 +78,8 @@ function formatEnrichmentPost(market: Market, metadata: MarketMetadata): string 
 }
 
 function formatEnrichmentComment(market: Market, metadata: MarketMetadata): string {
-  return `Quality: ${metadata.qualityScore}/100 | ${metadata.category} | ${metadata.timingType} timing ${metadata.timingValid ? '✅' : '⚠️'} | ${metadata.qualityFlags.slice(0, 3).join(', ')}`.substring(0, 500);
+  const v7Flag = metadata.v7Compliant ? 'v7✅' : 'v7🚫';
+  return `Quality: ${metadata.qualityScore}/100 | ${metadata.category} | ${metadata.timingType} timing ${metadata.timingValid ? '✅' : '⚠️'} | ${v7Flag} | ${metadata.qualityFlags.slice(0, 3).join(', ')}`.substring(0, 500);
 }
 
 function sleep(ms: number): Promise<void> {
