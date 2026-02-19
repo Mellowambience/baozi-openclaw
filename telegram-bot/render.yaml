@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: baozi-telegram-bot
+    runtime: node
+    buildCommand: cd telegram-bot && npm install && npm run build
+    startCommand: cd telegram-bot && npm start
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
