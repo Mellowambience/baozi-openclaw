@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: baozi-alert-agent
+    runtime: node
+    rootDir: claim-alert-agent
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: BAOZI_PROGRAM_ID
+        sync: false
+      - key: SOLANA_RPC_URL
+        sync: false
+      - key: POLL_INTERVAL_MINUTES
+        value: "15"
