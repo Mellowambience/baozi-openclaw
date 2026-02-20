@@ -9,7 +9,7 @@ import { fetchHackerNewsTrends } from "./sources/hackernews.ts";
 import { fetchRSSFeeds } from "./sources/rss.ts";
 import { generateBatch } from "./market/generator.ts";
 import { validateMarket } from "./market/validator.ts";
-import { createLabMarket } from "./market/creator.ts";
+import { createLabMarket, closeMCP } from "./market/creator.ts";
 import { loadState, saveState, isTopicSeen, markTopicSeen, mergeTopics, pruneState, recordCreatedMarket } from "./market/dedup.ts";
 import { Keypair } from "@solana/web3.js";
 
@@ -139,6 +139,7 @@ if (mode === "loop") {
 } else {
   runOnce().then((n) => {
     console.log(`\nDone. ${n} markets ${CONFIG.DRY_RUN ? "would be" : ""} created.`);
+    closeMCP();
     process.exit(0);
   });
 }
