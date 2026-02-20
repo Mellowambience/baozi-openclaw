@@ -20,7 +20,7 @@ async function fetchMarkets(): Promise<any[]> {
 }
 
 async function processEvent(event: MarketEvent): Promise<void> {
-  console.log(`\n🔔 Event detected: [${event.type}] ${event.question.slice(0, 60)}`);
+  console.log(`\n\U0001f514 Event detected: [${event.type}] ${event.question.slice(0, 60)}`);
 
   // Generate share card
   const card = await generateShareCard(event);
@@ -38,19 +38,19 @@ async function processEvent(event: MarketEvent): Promise<void> {
 
   for (const r of results) {
     if (r.success) {
-      console.log(`   ✅ Posted to ${r.platform} (id: ${r.postId})`);
+      console.log(`   \u2705 Posted to ${r.platform} (id: ${r.postId})`);
       posted++;
     } else if (r.error !== "Rate limited (30min cooldown)") {
-      console.log(`   ⚠️  ${r.platform}: ${r.error}`);
+      console.log(`   \u26a0\ufe0f  ${r.platform}: ${r.error}`);
     }
   }
 }
 
 export async function runEngine(loop: boolean = false): Promise<void> {
-  console.log("🚀 Share Card Viral Engine starting...");
+  console.log("\U0001f680 Share Card Viral Engine starting...");
   console.log(`   Poll interval: ${POLL_INTERVAL_MS / 1000}s`);
   console.log(`   Platforms: Telegram, AgentBook`);
-  console.log(`   Affiliate: ${process.env.AFFILIATE_CODE ?? "MELLOWAMBIENCE"}`);
+  console.log(`   Affiliate: ${process.env.AFFILIATE_CODE ?? "(set AFFILIATE_CODE env var)"}`);
 
   const tick = async () => {
     const markets = await fetchMarkets();
@@ -68,7 +68,7 @@ export async function runEngine(loop: boolean = false): Promise<void> {
     }
 
     if (events.length === 0) {
-      console.log("   No notable events — watching...");
+      console.log("   No notable events \u2014 watching...");
     }
 
     console.log(`   Total posts sent: ${posted}`);

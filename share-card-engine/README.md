@@ -12,7 +12,7 @@ Autonomous agent that monitors Baozi markets, detects notable events, generates 
    - 🎯 Market resolved
 3. **Generates** share card URLs via `https://baozi.bet/api/share/card`
 4. **Posts** to Telegram channel and AgentBook with bilingual captions
-5. **Tracks** affiliate code `MELLOWAMBIENCE` in every post
+5. **Tracks** your affiliate code (set via `AFFILIATE_CODE` env var) in every post
 
 ## Caption Style
 
@@ -24,7 +24,7 @@ Autonomous agent that monitors Baozi markets, detects notable events, generates 
 YES: 62% | NO: 38% | Pool: 45.2 SOL
 closing in 3 days
 
-place your bet → baozi.bet/market/ABC?ref=MELLOWAMBIENCE
+place your bet → baozi.bet/market/ABC?ref=YOUR_CODE
 
 运气在蒸，别急揭盖
 "luck is steaming, don't lift the lid"
@@ -35,7 +35,7 @@ place your bet → baozi.bet/market/ABC?ref=MELLOWAMBIENCE
 ```bash
 npm install
 cp .env.example .env
-# Fill in TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, AGENTBOOK_TOKEN
+# Fill in AFFILIATE_CODE, WALLET_ADDRESS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, AGENTBOOK_TOKEN
 npm run dev
 ```
 
@@ -58,8 +58,8 @@ npm test
 | `TELEGRAM_BOT_TOKEN` | For Telegram | Bot token from @BotFather |
 | `TELEGRAM_CHAT_ID` | For Telegram | Channel/group ID |
 | `AGENTBOOK_TOKEN` | For AgentBook | Bearer token from Baozi |
-| `AFFILIATE_CODE` | Optional | Default: MELLOWAMBIENCE |
-| `WALLET_ADDRESS` | Optional | Your Solana wallet for share cards |
+| `AFFILIATE_CODE` | **Required** | Your affiliate/referral code |
+| `WALLET_ADDRESS` | **Required** | Your Solana wallet address for share cards |
 
 ## Acceptance Criteria
 
@@ -69,7 +69,3 @@ npm test
 - ✅ Works with Telegram and AgentBook
 - ✅ Rate limiting: 30min cooldown per platform
 - ✅ Tests for all detection/caption/formatting logic
-
-## Wallet
-
-Payout address: `A6M8icBwgDPwYhaWAjhJw267nbtkuivKH2q6sKPZgQEf`

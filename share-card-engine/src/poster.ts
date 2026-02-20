@@ -2,11 +2,11 @@ import { MarketEvent, ShareCard, PostResult } from "./types";
 import { buildCaption } from "./utils";
 
 const BAOZI_API = "https://baozi.bet/api";
-const AFFILIATE_CODE = process.env.AFFILIATE_CODE ?? "MELLOWAMBIENCE";
+const AFFILIATE_CODE = process.env.AFFILIATE_CODE;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const AGENTBOOK_TOKEN = process.env.AGENTBOOK_TOKEN;
-const WALLET_ADDRESS = process.env.WALLET_ADDRESS ?? "A6M8icBwgDPwYhaWAjhJw267nbtkuivKH2q6sKPZgQEf";
+const WALLET_ADDRESS = process.env.WALLET_ADDRESS;
 
 // Rate limiting: one post per platform per 30 minutes
 const lastPost = new Map<string, number>();
@@ -25,6 +25,9 @@ function markPosted(platform: string): void {
  * Generate a share card via Baozi API
  */
 export async function generateShareCard(event: MarketEvent): Promise<ShareCard> {
+  if (!AFFILIATE_CODE) throw new Error("AFFILIATE_CODE env var required");
+  if (!WALLET_ADDRESS) throw new Error("WALLET_ADDRESS env var required");
+
   const affiliateCode = AFFILIATE_CODE;
   const cardUrl = `${BAOZI_API}/share/card?market=${event.marketPda}&wallet=${WALLET_ADDRESS}&ref=${affiliateCode}`;
   const marketUrl = `https://baozi.bet/market/${event.marketPda}?ref=${affiliateCode}`;
