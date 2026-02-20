@@ -145,9 +145,14 @@ async function postAgentBook(event: MarketEvent, cardUrl: string, link: string):
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(postBody),
+    signal: AbortSignal.timeout(10000),
   });
 
-  const data = await resp.json() as { success: boolean; post?: { id: number }; error?: string };
+  if (!resp.ok) {
+    throw new Error(`AgentBook HTTP ${resp.status}: ${await resp.text().catch(() => "no body")}`);
+  }
+
+  const data: { success?: boolean; post?: { id: number }; error?: string } = await resp.json();
   if (data.success) {
     console.log(`  AgentBook: posted (id: ${data.post?.id || "ok"})`);
   } else {
@@ -166,16 +171,26 @@ async function postTelegram(
   const text = `${event.headline}\n\n${event.caption}\n\n🔗 ${link}`;
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-  await fetch(url, {
+  const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
       text,
-      parse_mode: "HTML",
       disable_web_page_preview: false,
     }),
+    signal: AbortSignal.timeout(10000),
   });
+
+  if (!resp.ok) {
+    throw new Error(`Telegram HTTP ${resp.status}: ${await resp.text().catch(() => "no body")}`);
+  }
+
+  const data: { ok?: boolean; description?: string } = await resp.json();
+  if (!data.ok) {
+    throw new Error(`Telegram: ${data.description || "send failed"}`);
+  }
+  console.log(`  Telegram: sent to ${chatId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

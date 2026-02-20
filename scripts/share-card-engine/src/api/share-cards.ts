@@ -36,14 +36,18 @@ export async function downloadShareCard(
 ): Promise<boolean> {
   try {
     const url = shareCardUrl(opts);
-    const resp = await fetch(url);
-    if (!resp.ok) return false;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) {
+      console.error(`Share card download failed: HTTP ${resp.status}`);
+      return false;
+    }
 
     const buffer = await resp.arrayBuffer();
     const { writeFileSync } = await import("fs");
     writeFileSync(outputPath, Buffer.from(buffer));
     return true;
-  } catch {
+  } catch (err) {
+    console.error("Share card download error:", err instanceof Error ? err.message : String(err));
     return false;
   }
 }

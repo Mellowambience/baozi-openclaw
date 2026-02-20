@@ -105,7 +105,10 @@ function decodeBoolean(data: Buffer, pubkey: PublicKey): MarketSnapshot | null {
       winningOutcome, layer: LAYER[layerCode] || "Unknown",
       creator: creator.toBase58(), hasBets, type: "boolean",
     };
-  } catch { return null; }
+  } catch {
+    // Binary decode errors are expected for non-matching accounts
+    return null;
+  }
 }
 
 function decodeRace(data: Buffer, pubkey: PublicKey): RaceSnapshot | null {

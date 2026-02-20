@@ -13,6 +13,8 @@ import { shareCardUrl, marketUrl, downloadShareCard } from "../api/share-cards.j
 
 const AFFILIATE_CODE = process.env.AFFILIATE_CODE || "";
 const WALLET = process.env.WALLET || "";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // demo — scan for events and show what would be posted
@@ -64,6 +66,8 @@ export async function cmdMonitor(intervalSec = 60): Promise<void> {
     targets: ["console"],
     affiliateCode: AFFILIATE_CODE,
     wallet: WALLET,
+    telegramBotToken: TELEGRAM_BOT_TOKEN,
+    telegramChatId: TELEGRAM_CHAT_ID,
     maxPostsPerCycle: 3,
     dedupeWindow: 30,
   };
@@ -123,6 +127,8 @@ export async function cmdScan(targets: string[] = ["console"]): Promise<void> {
     targets: targets as DistConfig["targets"],
     affiliateCode: AFFILIATE_CODE,
     wallet: WALLET,
+    telegramBotToken: TELEGRAM_BOT_TOKEN,
+    telegramChatId: TELEGRAM_CHAT_ID,
     maxPostsPerCycle: 10,
     dedupeWindow: 5,
   };
@@ -153,13 +159,16 @@ export async function cmdScan(targets: string[] = ["console"]): Promise<void> {
         marketLink: r.marketLink,
         affiliateCode: AFFILIATE_CODE,
       });
+    } else {
+      console.error(`  [${r.target}] Failed: ${r.error}`);
     }
   }
 
   saveMetrics(metrics);
 
   const ok = results.filter((r) => r.success).length;
-  console.log(`\nDistributed ${ok}/${results.length} share cards`);
+  const failed = results.filter((r) => !r.success).length;
+  console.log(`\nDistributed ${ok}/${results.length} share cards${failed > 0 ? ` (${failed} failed)` : ""}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
