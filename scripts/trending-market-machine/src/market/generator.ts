@@ -195,13 +195,13 @@ function generateNewsMarket(topic: TrendingTopic): MarketQuestion | null {
     const closingTime = new Date(eventTime.getTime() - 24 * HOURS);
 
     return {
-      question: `Will the product/feature mentioned in "${truncate(topic.title, 80)}" be publicly available within 14 days?`,
+      question: `Will the product/feature mentioned in "${truncate(topic.title, 80)}" be publicly available within 14 days? (Source: CoinGecko)`,
       description: `Trending news: "${topic.title}". Source: ${topic.source}. Resolves YES if the product/feature/announcement becomes publicly available or officially confirmed within 14 days of market creation.`,
       marketType: "boolean",
       category: "economic",
       closingTime,
       resolutionTime: new Date(eventTime.getTime() + CONFIG.DEFAULT_RESOLUTION_BUFFER_SECONDS * 1000),
-      dataSource: "Official press release or product page",
+      dataSource: "CoinGecko and official project announcements",
       dataSourceUrl: topic.url || "",
       tags: ["tech", "launch", "product"],
       trendSource: topic,
