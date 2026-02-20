@@ -47,6 +47,7 @@ export async function fetchCoinGeckoTrends(): Promise<TrendingTopic[]> {
       detectedAt: new Date(),
       metadata: {
         coinId: coin.id,
+        name: coin.name,
         symbol: coin.symbol,
         marketCapRank: coin.market_cap_rank,
         priceChangePercent24h: priceChange,

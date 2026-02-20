@@ -12,6 +12,7 @@ import { validateMarket } from "./market/validator.ts";
 import { createLabMarket, closeMCP } from "./market/creator.ts";
 import { loadState, saveState, isTopicSeen, markTopicSeen, mergeTopics, pruneState, recordCreatedMarket } from "./market/dedup.ts";
 import { Keypair } from "@solana/web3.js";
+import type { TrendingTopic } from "./config.ts";
 
 async function detectTrends() {
   console.log("\n=== Detecting Trends ===");
@@ -37,20 +38,23 @@ async function detectTrends() {
   return newTopics;
 }
 
-async function processTopics(topics: typeof Array.prototype) {
+async function processTopics(topics: TrendingTopic[]) {
   // Generate market questions
-  const questions = generateBatch(topics as any);
+  const questions = generateBatch(topics);
   console.log(`\n=== Generated ${questions.length} Market Questions ===`);
 
   // Load wallet if available
   let wallet: Keypair | undefined;
   if (process.env.SOLANA_PRIVATE_KEY) {
     try {
-      const keyBytes = JSON.parse(process.env.SOLANA_PRIVATE_KEY);
+      const keyBytes: number[] = JSON.parse(process.env.SOLANA_PRIVATE_KEY);
+      if (!Array.isArray(keyBytes) || keyBytes.length !== 64) {
+        throw new Error(`Expected 64-byte keypair array, got ${Array.isArray(keyBytes) ? keyBytes.length : typeof keyBytes}`);
+      }
       wallet = Keypair.fromSecretKey(Uint8Array.from(keyBytes));
       console.log(`Wallet: ${wallet.publicKey.toBase58()}`);
-    } catch {
-      console.log("Invalid SOLANA_PRIVATE_KEY format");
+    } catch (err) {
+      console.error("Invalid SOLANA_PRIVATE_KEY:", (err as Error).message);
     }
   }
 

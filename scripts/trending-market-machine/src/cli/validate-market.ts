@@ -13,18 +13,21 @@ if (!question) {
 const now = new Date();
 const closingTime = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
+const eventTime = new Date(closingTime.getTime() + 24 * 60 * 60 * 1000);
+
 const market: MarketQuestion = {
   question,
   description: "Auto-generated test market",
   marketType: "boolean",
   category: "crypto",
   closingTime,
-  resolutionTime: new Date(closingTime.getTime() + 300 * 1000),
+  resolutionTime: new Date(eventTime.getTime() + 300 * 1000),
   dataSource: "Manual verification",
   dataSourceUrl: "",
   tags: ["test"],
   trendSource: { id: "test", title: question, source: "cli", category: "crypto", score: 50, detectedAt: now, metadata: {} },
   timingType: "A",
+  eventTime,
 };
 
 console.log("=== Local Validation ===");

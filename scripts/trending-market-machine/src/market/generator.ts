@@ -1,22 +1,10 @@
 // Convert trending topics into properly-structured market questions
 // Follows Baozi Parimutuel Rules v7.0 — TYPE A ONLY (no measurement-period markets)
 import { CONFIG, type TrendingTopic, type MarketQuestion } from "../config.ts";
+import { containsBlockedTerm } from "./rules.ts";
 
 const HOURS = 60 * 60 * 1000;
 const DAYS = 24 * HOURS;
-
-// v7.0 Blocked terms — auto-reject any question containing these
-const BLOCKED_TERMS = [
-  "price above", "price below", "trading volume", "market cap",
-  "gains most", "total volume", "total burned", "average over",
-  "this week", "this month", "floor price", "ath", "all-time high",
-  "tvl", "total value locked",
-];
-
-function containsBlockedTerm(text: string): boolean {
-  const lower = text.toLowerCase();
-  return BLOCKED_TERMS.some((term) => lower.includes(term));
-}
 
 // Crypto market generators — v7.0: event-based only (no price/volume/rank)
 function generateCryptoMarket(topic: TrendingTopic): MarketQuestion | null {
@@ -195,7 +183,7 @@ function generateNewsMarket(topic: TrendingTopic): MarketQuestion | null {
     const closingTime = new Date(eventTime.getTime() - 24 * HOURS);
 
     return {
-      question: `Will the product/feature mentioned in "${truncate(topic.title, 80)}" be publicly available within 14 days? (Source: CoinGecko)`,
+      question: `Will the product/feature mentioned in "${truncate(topic.title, 80)}" be publicly available within 14 days?`,
       description: `Trending news: "${topic.title}". Source: ${topic.source}. Resolves YES if the product/feature/announcement becomes publicly available or officially confirmed within 14 days of market creation.`,
       marketType: "boolean",
       category: "economic",

@@ -1,16 +1,9 @@
 // Validate market questions against Baozi Parimutuel Rules v7.0
 import { CONFIG, type MarketQuestion, type ValidationResult } from "../config.ts";
+import { BLOCKED_TERMS } from "./rules.ts";
 
 const HOURS = 60 * 60 * 1000;
 const DAYS = 24 * HOURS;
-
-// v7.0 Blocked terms — auto-reject any question containing these
-const BLOCKED_TERMS = [
-  "price above", "price below", "trading volume", "market cap",
-  "gains most", "total volume", "total burned", "average over",
-  "this week", "this month", "floor price", "ath", "all-time high",
-  "tvl", "total value locked",
-];
 
 // Local pre-validation (catch issues before hitting the API)
 export function localValidate(market: MarketQuestion): ValidationResult {

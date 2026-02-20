@@ -1,22 +1,23 @@
 // Create Lab markets on Baozi via MCP server + Solana transactions
 import { CONFIG, type MarketQuestion, type CreatedMarket } from "../config.ts";
+import { getCreatedMarketsFromState } from "./dedup.ts";
 import { Connection, Keypair, Transaction } from "@solana/web3.js";
 import { spawn, type ChildProcess } from "child_process";
 
-// Market creation state tracking
-const createdMarkets: CreatedMarket[] = [];
+// In-memory rate limit tracking (supplements dedup.ts for cross-restart persistence)
 const recentQuestions = new Set<string>();
 
-export function getCreatedMarkets(): CreatedMarket[] {
-  return [...createdMarkets];
-}
-
 // ─── MCP Client ──────────────────────────────────────────────────────────
+
+interface MCPResult {
+  content?: Array<{ text?: string; type?: string }>;
+  [key: string]: unknown;
+}
 
 class MCPClient {
   private proc: ChildProcess | null = null;
   private buffer = "";
-  private pendingResolves: Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }> = new Map();
+  private pendingResolves: Map<number, { resolve: (v: MCPResult) => void; reject: (e: Error) => void }> = new Map();
   private requestId = 0;
   private ready = false;
 
@@ -55,11 +56,13 @@ class MCPClient {
           if (msg.error) reject(new Error(JSON.stringify(msg.error)));
           else resolve(msg.result);
         }
-      } catch {}
+      } catch (err) {
+        console.error("MCP parse error:", (err as Error).message, "line:", line.slice(0, 100));
+      }
     }
   }
 
-  private sendRequest(method: string, params: any): Promise<any> {
+  private sendRequest(method: string, params: Record<string, unknown>): Promise<MCPResult> {
     return new Promise((resolve, reject) => {
       this.requestId++;
       const id = this.requestId;
@@ -75,12 +78,12 @@ class MCPClient {
     });
   }
 
-  private sendNotification(method: string, params: any): void {
+  private sendNotification(method: string, params: Record<string, unknown>): void {
     const msg = JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n";
     this.proc!.stdin!.write(msg);
   }
 
-  async callTool(name: string, args: any): Promise<any> {
+  async callTool(name: string, args: Record<string, string>): Promise<MCPResult> {
     if (!this.ready) throw new Error("MCP not connected");
     return this.sendRequest("tools/call", { name, arguments: args });
   }
@@ -117,10 +120,14 @@ export async function checkDuplicateMarket(question: string): Promise<boolean> {
   try {
     const resp = await fetch(`${CONFIG.BAOZI_API}/markets`, {
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(10000),
     });
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    const markets = Array.isArray(data) ? data : data.markets || [];
+    if (!resp.ok) {
+      console.warn(`Duplicate check API returned ${resp.status} — treating as potential duplicate`);
+      return true;
+    }
+    const data: unknown = await resp.json();
+    const markets: Array<Record<string, string>> = Array.isArray(data) ? data : (data as Record<string, unknown>).markets as Array<Record<string, string>> || [];
     for (const m of markets) {
       const existingQ = (m.question || m.title || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
       const qWords = new Set(normalized.split(" ").filter(Boolean));
@@ -129,7 +136,10 @@ export async function checkDuplicateMarket(question: string): Promise<boolean> {
       const similarity = overlap / Math.max(qWords.size, mWords.size);
       if (similarity > 0.6) return true;
     }
-  } catch {}
+  } catch (err) {
+    console.warn("Duplicate check failed:", (err as Error).message, "— treating as potential duplicate");
+    return true;
+  }
 
   return false;
 }
@@ -155,9 +165,10 @@ export async function createLabMarket(
     return null;
   }
 
-  // Rate limit
-  const recentCreations = createdMarkets.filter(
-    (m) => Date.now() - m.createdAt.getTime() < 60 * 60 * 1000
+  // Rate limit (uses persisted state to survive restarts)
+  const allCreated = getCreatedMarketsFromState();
+  const recentCreations = allCreated.filter(
+    (m) => Date.now() - new Date(m.createdAt).getTime() < 60 * 60 * 1000
   );
   if (recentCreations.length >= CONFIG.MAX_MARKETS_PER_HOUR) {
     console.log(`SKIPPED: Rate limit (${CONFIG.MAX_MARKETS_PER_HOUR}/hour)`);
@@ -174,7 +185,6 @@ export async function createLabMarket(
       createdAt: new Date(),
       trendId: market.trendSource.id,
     };
-    createdMarkets.push(dryResult);
     return dryResult;
   }
 
@@ -194,7 +204,7 @@ export async function createLabMarket(
       market_type: "typeA",
       event_time: market.eventTime.toISOString(),
     });
-    const validText = (validResult.content || []).map((c: any) => c.text || "").join("\n");
+    const validText = (validResult.content || []).map((c) => c.text || "").join("\n");
     console.log(`  Validation: ${validText.slice(0, 200)}`);
 
     if (validText.toLowerCase().includes("rejected") || validText.toLowerCase().includes("not valid")) {
@@ -214,7 +224,7 @@ export async function createLabMarket(
       creator_wallet: walletKeypair.publicKey.toBase58(),
     });
 
-    const createText = (createResult.content || []).map((c: any) => c.text || "").join("\n");
+    const createText = (createResult.content || []).map((c) => c.text || "").join("\n");
     console.log(`  MCP response: ${createText.slice(0, 300)}`);
 
     // Extract base64 transaction from MCP response
@@ -271,7 +281,6 @@ export async function createLabMarket(
       trendId: market.trendSource.id,
     };
 
-    createdMarkets.push(result);
     console.log(`  Market created! PDA: ${marketPda}`);
     return result;
   } catch (err) {
