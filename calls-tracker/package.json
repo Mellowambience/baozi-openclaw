@@ -1,0 +1,22 @@
+{
+  "name": "calls-tracker",
+  "version": "1.0.0",
+  "description": "Turn influencer predictions into on-chain Baozi Lab markets with reputation tracking",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.4",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.11.5",
+    "vitest": "^1.2.2"
+  }
+}
