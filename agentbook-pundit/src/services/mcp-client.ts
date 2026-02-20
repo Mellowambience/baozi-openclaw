@@ -3,15 +3,19 @@
  *
  * Imports handlers DIRECTLY from the installed @baozi.bet/mcp-server package
  * instead of spawning a subprocess. This is faster, more reliable, and testable.
+ *
+ * Also re-exports the handleTool function for intel tools (sentiment, whale moves,
+ * resolution forecasts, market alpha) and paper trades.
  */
 import { listMarkets, getMarket } from "@baozi.bet/mcp-server/dist/handlers/markets.js";
 import { listRaceMarkets, getRaceMarket, getRaceQuote } from "@baozi.bet/mcp-server/dist/handlers/race-markets.js";
 import { getQuote } from "@baozi.bet/mcp-server/dist/handlers/quote.js";
+import { handleTool } from "@baozi.bet/mcp-server/dist/tools.js";
 import { PROGRAM_ID } from "@baozi.bet/mcp-server/dist/config.js";
 import type { McpResult } from "../types/index.js";
 
 // Re-export the direct handlers for use in other modules
-export { listMarkets, getMarket, listRaceMarkets, getRaceMarket, getRaceQuote, getQuote, PROGRAM_ID };
+export { listMarkets, getMarket, listRaceMarkets, getRaceMarket, getRaceQuote, getQuote, handleTool, PROGRAM_ID };
 
 /**
  * Execute an MCP tool by name using direct handler imports.
@@ -51,6 +55,31 @@ export async function execMcpTool(
         const raceQuote = getRaceQuote(raceMarketData, params.outcome_index, params.amount);
         return { success: true, data: raceQuote };
       }
+      // Intel tools (x402 Payment Protocol)
+      case "get_intel_sentiment":
+      case "get_intel_whale_moves":
+      case "get_intel_resolution_forecast":
+      case "get_intel_market_alpha": {
+        const result = await handleTool(toolName, params);
+        const text = result?.content?.[0]?.text;
+        if (!text) return { success: false, error: "Empty response" };
+        const parsed = JSON.parse(text);
+        return parsed.success === false
+          ? { success: false, error: parsed.error }
+          : { success: true, data: parsed };
+      }
+
+      // Paper trade (simulated prediction)
+      case "submit_paper_trade": {
+        const result = await handleTool(toolName, params);
+        const text = result?.content?.[0]?.text;
+        if (!text) return { success: false, error: "Empty response" };
+        const parsed = JSON.parse(text);
+        return parsed.success === false
+          ? { success: false, error: parsed.error }
+          : { success: true, data: parsed };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolName}` };
     }
