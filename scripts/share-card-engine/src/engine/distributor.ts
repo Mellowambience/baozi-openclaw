@@ -134,23 +134,24 @@ async function postConsole(event: MarketEvent, cardUrl: string, link: string): P
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function postAgentBook(event: MarketEvent, cardUrl: string, link: string): Promise<void> {
-  // AgentBook is Baozi's social board — post via API
+  const content = `${event.caption}\n\n${cardUrl}\n${link}`;
   const postBody = {
-    content: `${event.caption}\n\n📸 ${cardUrl}\n🔗 ${link}`,
-    type: "market_share",
+    content,
+    walletAddress: "GpXHXs5KfzfXbNKcMLNbAMsJsgPsBE7y5GtwVoiuxYvH",
     marketPda: event.market.pda,
   };
 
-  // AgentBook API endpoint (from baozi.bet/agentbook)
-  const resp = await fetch("https://baozi.bet/api/agentbook/post", {
+  const resp = await fetch("https://baozi.bet/api/agentbook/posts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(postBody),
   });
 
-  if (!resp.ok) {
-    // AgentBook may not have a public POST API yet — log and continue
-    console.log(`  AgentBook POST returned ${resp.status} (API may not be public yet)`);
+  const data = await resp.json() as { success: boolean; post?: { id: number }; error?: string };
+  if (data.success) {
+    console.log(`  AgentBook: posted (id: ${data.post?.id || "ok"})`);
+  } else {
+    throw new Error(`AgentBook: ${data.error || "unknown error"}`);
   }
 }
 
