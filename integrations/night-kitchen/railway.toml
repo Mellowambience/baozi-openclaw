@@ -3,5 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "integrations/night-kitchen/Dockerfile"
 
 [deploy]
-healthcheckPath = "/"
 restartPolicyType = "always"
+
+[deploy.env]
+RUN_ON_START = "true"
