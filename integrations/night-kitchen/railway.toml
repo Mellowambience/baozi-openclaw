@@ -1,0 +1,7 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "integrations/night-kitchen/Dockerfile"
+
+[deploy]
+healthcheckPath = "/"
+restartPolicyType = "always"
