@@ -229,3 +229,4 @@ export function selectProverb(params: {
   // pick deterministically based on pool size (stable across runs)
   return candidates[Math.floor(poolSol * 7) % candidates.length];
 }
+// cache-bust
