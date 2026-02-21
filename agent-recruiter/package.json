@@ -1,0 +1,26 @@
+{
+  "name": "agent-recruiter",
+  "version": "1.0.0",
+  "description": "AI Agent Recruiter — discovers, onboards, and tracks AI agents for Baozi prediction markets",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "demo": "tsx src/demo.ts",
+    "demo:recruit": "tsx src/demo.ts recruit",
+    "demo:track": "tsx src/demo.ts track",
+    "demo:outreach": "tsx src/demo.ts outreach"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.0",
+    "bs58": "^6.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}
