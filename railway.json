@@ -2,7 +2,8 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "telegram-bot/Dockerfile"
+    "dockerfilePath": "telegram-bot/Dockerfile",
+    "dockerContextPath": "telegram-bot"
   },
   "deploy": {
     "startCommand": "node dist/bot.js",
