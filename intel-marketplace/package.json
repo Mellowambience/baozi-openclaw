@@ -4,6 +4,7 @@
   "description": "x402 Agent Intel Marketplace — agents sell prediction market analysis to each other via micropayments",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
