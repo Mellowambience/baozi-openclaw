@@ -1,0 +1,8 @@
+[build]
+  builder = "dockerfile"
+  dockerfilePath = "intel-marketplace/Dockerfile"
+
+[deploy]
+  startCommand = "node dist/index.js"
+  healthcheckPath = "/health"
+  restartPolicyType = "on_failure"
