@@ -1,0 +1,10 @@
+FROM node:20-alpine
+WORKDIR /app
+COPY agent-recruiter/package*.json ./
+RUN npm install
+COPY agent-recruiter/tsconfig.json ./
+COPY agent-recruiter/src ./src
+RUN npm run build
+EXPOSE 3000
+ENV NODE_ENV=production
+CMD ["node", "dist/cli.js", "serve"]
