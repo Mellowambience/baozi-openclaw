@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Read-only Telegram bot for Baozi prediction market data",
   "main": "dist/bot.js",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "start": "node dist/bot.js",
