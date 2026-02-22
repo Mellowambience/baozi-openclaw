@@ -1,7 +1,7 @@
 {
   "name": "intel-marketplace",
   "version": "1.0.0",
-  "description": "x402 Agent Intel Marketplace — agents sell prediction market analysis to each other via micropayments",
+  "description": "x402 Agent Intel Marketplace \u2014 agents sell prediction market analysis to each other via micropayments",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -21,6 +21,7 @@
     "bs58": "^6.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
     "vitest": "^1.2.0"
