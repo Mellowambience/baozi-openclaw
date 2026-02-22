@@ -37,7 +37,7 @@ export const PROVERBS: Proverb[] = [
     pinyin: 'hǎo fàn bù pà wǎn',
     en: "good food doesn't fear being late — worth waiting",
     theme: 'patience',
-    context: 'market hasn't resolved but looks promising',
+    context: "market hasn't resolved but looks promising",
   },
   {
     zh: '瓜熟蒂落',
@@ -72,7 +72,7 @@ export const PROVERBS: Proverb[] = [
   {
     zh: '贪多嚼不烂',
     pinyin: 'tān duō jiáo bù làn',
-    en: 'bite off too much, you can't chew — risk warning',
+    en: "bite off too much, you can't chew — risk warning",
     theme: 'risk',
     context: 'very large pool, high stakes market',
   },
@@ -108,7 +108,7 @@ export const PROVERBS: Proverb[] = [
   {
     zh: '塞翁失马，焉知非福',
     pinyin: 'sài wēng shī mǎ, yān zhī fēi fú',
-    en: 'the old man lost his horse — who knows if it's bad fortune',
+    en: "the old man lost his horse — who knows if it's bad fortune",
     theme: 'luck',
     context: 'market swung against position, but not resolved',
   },
@@ -182,7 +182,7 @@ export const PROVERBS: Proverb[] = [
   {
     zh: '既来之，则安之',
     pinyin: 'jì lái zhī, zé ān zhī',
-    en: 'since you're here, be at peace',
+    en: "since you're here, be at peace",
     theme: 'acceptance',
     context: 'market resolved against position',
   },
