@@ -1,0 +1,9 @@
+[build]
+  dockerfilePath = "agent-recruiter/Dockerfile"
+
+[deploy]
+  startCommand = "node dist/cli.js serve"
+  healthcheckPath = "/health"
+  healthcheckTimeout = 30
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 3
