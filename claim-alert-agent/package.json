@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Wallet monitoring agent with claim reminders, odds shift alerts, and closing-soon notifications",
   "main": "dist/agent.js",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "start": "node dist/agent.js",
