@@ -45,12 +45,12 @@ export class TwitterTrendAdapter implements TrendAdapter {
 
     // Stub: representative trending topics
     console.log("[Twitter] Fetching trending topics (stub)");
-    return [
+    return ([
       { topic: "Bitcoin ETF approval", keywords: ["BTC", "ETF", "BlackRock", "SEC"], score: 88, velocity: 1200, category: "crypto", rawData: { source: "twitter_stub", woeid: 1 } },
       { topic: "Super Bowl predictions", keywords: ["NFL", "SuperBowl", "Chiefs", "Eagles"], score: 92, velocity: 3400, category: "sports", rawData: { source: "twitter_stub" } },
       { topic: "OpenAI GPT-5 release", keywords: ["GPT5", "OpenAI", "AI", "ChatGPT"], score: 85, velocity: 900, category: "technology", rawData: { source: "twitter_stub" } },
       { topic: "Fed interest rate decision", keywords: ["Fed", "FOMC", "rates", "inflation"], score: 72, velocity: 600, category: "finance", rawData: { source: "twitter_stub" } },
-    ].slice(0, limit);
+    ] as RawTrend[]).slice(0, limit);
   }
 }
 
@@ -67,11 +67,11 @@ export class RedditTrendAdapter implements TrendAdapter {
 
   async fetch(limit: number): Promise<RawTrend[]> {
     console.log("[Reddit] Fetching trending posts (stub)");
-    return [
+    return ([
       { topic: "Ethereum Pectra upgrade launch", keywords: ["ETH", "Ethereum", "Pectra", "EIP"], score: 78, velocity: 450, category: "crypto", rawData: { subreddit: "r/ethereum", upvotes: 12000 } },
       { topic: "NBA All-Star Game MVP", keywords: ["NBA", "AllStar", "MVP", "basketball"], score: 65, velocity: 280, category: "sports", rawData: { subreddit: "r/nba" } },
       { topic: "AI regulation bill Senate vote", keywords: ["AI", "regulation", "Senate", "tech"], score: 71, velocity: 320, category: "politics", rawData: { subreddit: "r/technology" } },
-    ].slice(0, limit);
+    ] as RawTrend[]).slice(0, limit);
   }
 }
 
@@ -84,10 +84,10 @@ export class GoogleTrendsAdapter implements TrendAdapter {
 
   async fetch(limit: number): Promise<RawTrend[]> {
     console.log("[Google Trends] Fetching trending searches (stub)");
-    return [
+    return ([
       { topic: "Solana price prediction 2026", keywords: ["SOL", "Solana", "price", "prediction"], score: 69, velocity: 200, category: "crypto", rawData: { geo: "US", timeframe: "now 1-d" } },
       { topic: "World Cup 2026 host city", keywords: ["WorldCup", "FIFA", "2026", "soccer"], score: 83, velocity: 550, category: "sports", rawData: { geo: "US" } },
-    ].slice(0, limit);
+    ] as RawTrend[]).slice(0, limit);
   }
 }
 
@@ -104,10 +104,10 @@ export class CryptoSocialAdapter implements TrendAdapter {
 
   async fetch(limit: number): Promise<RawTrend[]> {
     console.log("[CryptoSocial] Fetching social trends (stub)");
-    return [
+    return ([
       { topic: "PEPE memecoin surge", keywords: ["PEPE", "memecoin", "pump", "altcoin"], score: 91, velocity: 2100, category: "crypto", rawData: { platform: "lunarcr", social_volume_24h: 45000 } },
       { topic: "Coinbase listing announcement", keywords: ["Coinbase", "listing", "token", "exchange"], score: 76, velocity: 890, category: "crypto", rawData: { platform: "santiment" } },
-    ].slice(0, limit);
+    ] as RawTrend[]).slice(0, limit);
   }
 }
 
