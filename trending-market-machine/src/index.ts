@@ -25,11 +25,11 @@ export class TrendingMarketMachine {
 
   constructor(config: TrendingMachineConfig) {
     this.config = {
-      minTrendScore: DEFAULT_MIN_TREND_SCORE,
-      minConfidence: DEFAULT_MIN_CONFIDENCE,
-      maxProposalsPerRun: DEFAULT_MAX_PROPOSALS,
-      dedupSimilarityThreshold: 0.8,
       ...config,
+      minTrendScore: config.minTrendScore ?? DEFAULT_MIN_TREND_SCORE,
+      minConfidence: config.minConfidence ?? DEFAULT_MIN_CONFIDENCE,
+      maxProposalsPerRun: config.maxProposalsPerRun ?? DEFAULT_MAX_PROPOSALS,
+      dedupSimilarityThreshold: config.dedupSimilarityThreshold ?? 0.8,
     };
     const client = new BaoziClient();
     this.signals = new SignalAggregator();
