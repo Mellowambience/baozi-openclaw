@@ -4,6 +4,7 @@
   "description": "Trending Market Machine — monitors trending topics and auto-creates Baozi Labs prediction markets",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
