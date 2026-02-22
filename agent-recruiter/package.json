@@ -1,7 +1,7 @@
 {
   "name": "agent-recruiter",
   "version": "1.0.0",
-  "description": "AI Agent Recruiter — discovers, onboards, and tracks AI agents for Baozi prediction markets",
+  "description": "AI Agent Recruiter \u2014 discovers, onboards, and tracks AI agents for Baozi prediction markets",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -20,6 +20,7 @@
     "bs58": "^6.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
     "vitest": "^1.2.0"
