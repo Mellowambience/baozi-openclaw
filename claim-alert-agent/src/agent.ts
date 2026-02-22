@@ -32,25 +32,25 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // ─── API ───
 
-async function getPositions(wallet: string) {
+async function getPositions(wallet: string): Promise<any> {
   const res = await fetch(`${BAOZI_API}/api/mcp/get_positions?wallet=${wallet}`);
   if (!res.ok) throw new Error(`Positions error: ${res.status}`);
   return res.json();
 }
 
-async function getClaimable(wallet: string) {
+async function getClaimable(wallet: string): Promise<any> {
   const res = await fetch(`${BAOZI_API}/api/mcp/get_claimable?wallet=${wallet}`);
   if (!res.ok) throw new Error(`Claimable error: ${res.status}`);
   return res.json();
 }
 
-async function getResolutionStatus(marketPda: string) {
+async function getResolutionStatus(marketPda: string): Promise<any> {
   const res = await fetch(`${BAOZI_API}/api/mcp/get_resolution_status?market=${marketPda}`);
   if (!res.ok) throw new Error(`Resolution error: ${res.status}`);
   return res.json();
 }
 
-async function getQuote(marketPda: string, side: string) {
+async function getQuote(marketPda: string, side: string): Promise<any> {
   const res = await fetch(`${BAOZI_API}/api/mcp/get_quote?market=${marketPda}&side=${side}&amount=1`);
   if (!res.ok) return null;
   return res.json();
@@ -58,7 +58,7 @@ async function getQuote(marketPda: string, side: string) {
 
 // ─── Alert Logic ───
 
-async function checkWallet(config: WalletConfig) {
+async function checkWallet(config: WalletConfig): Promise<number> {
   const { address, chatId, alerts } = config;
   const messages: string[] = [];
 
@@ -93,14 +93,13 @@ async function checkWallet(config: WalletConfig) {
 
       // Closing soon
       if (alerts.closingSoon && pos.closingTime) {
-        const msUntilClose = new Date(pos.closingTime).getTime() - Date.now();
-        const hoursUntilClose = msUntilClose / 3600000;
-
-        if (hoursUntilClose > 0 && hoursUntilClose <= alerts.closingSoonHours) {
+        const ms = new Date(pos.closingTime).getTime() - Date.now();
+        const hoursLeft = ms / 3600000;
+        if (hoursLeft > 0 && hoursLeft < alerts.closingSoonHours) {
           messages.push(
             `\u23f0 *Closing Soon!*\n` +
-            `"${question}" closes in ${hoursUntilClose.toFixed(1)}h.\n` +
-            `Your position: ${amount.toFixed(2)} SOL on ${side}\n` +
+            `"${question}" closes in ${hoursLeft.toFixed(1)}h.\n` +
+            `Your ${side} position: ${amount.toFixed(2)} SOL\n` +
             `[View market](https://baozi.bet/market/${pda})`
           );
         }
@@ -115,23 +114,21 @@ async function checkWallet(config: WalletConfig) {
           const prev = walletSnapshots.get(pda);
 
           if (prev) {
-            const prevOdds = side === 'Yes' ? prev.yesOdds : prev.noOdds;
-            const shift = Math.abs(currentOdds - prevOdds);
-
+            const shift = Math.abs(currentOdds - prev.yesOdds);
             if (shift >= alerts.oddsShiftThreshold) {
-              const direction = currentOdds > prevOdds ? '\u2b06\ufe0f' : '\u2b07\ufe0f';
+              const direction = currentOdds > prev.yesOdds ? '\u2b06\ufe0f' : '\u2b07\ufe0f';
               messages.push(
-                `${direction} *Odds Shift!*\n` +
+                `${direction} *Odds Shift Alert!*\n` +
                 `"${question}"\n` +
-                `Yes: ${prevOdds.toFixed(1)}% \u2192 ${currentOdds.toFixed(1)}% (${shift > 0 ? '+' : ''}${(currentOdds - prevOdds).toFixed(1)}%)\n` +
-                `Your position: ${amount.toFixed(2)} SOL on ${side}\n` +
+                `Yes odds: ${prev.yesOdds.toFixed(1)}% → ${currentOdds.toFixed(1)}% (${shift > 0 ? '+' : ''}${(currentOdds - prev.yesOdds).toFixed(1)}%)\n` +
                 `[View market](https://baozi.bet/market/${pda})`
               );
             }
           }
 
           // Update snapshot
-          walletSnapshots.set(pda, {
+          const snapshots = previousSnapshots.get(address) || new Map<string, MarketSnapshot>();
+          snapshots.set(pda, {
             pda,
             question,
             yesOdds: currentOdds,
@@ -139,15 +136,12 @@ async function checkWallet(config: WalletConfig) {
             status: pos.status || 'Active',
             closingTime: pos.closingTime,
           });
-          previousSnapshots.set(address, walletSnapshots);
+          previousSnapshots.set(address, snapshots);
         }
       }
-    }
 
-    // 3. Check for resolved markets
-    for (const pos of positions) {
-      if (pos.status === 'Resolved' || pos.status === 'ResolvedPending') {
-        const pda = pos.marketPda || pos.pda || '';
+      // Check if resolved
+      if (pos.status === 'Resolved' || pos.status === 'Closed') {
         try {
           const resolution = await getResolutionStatus(pda);
           const won = (resolution.outcome === 'Yes' && pos.side === 'Yes') ||
@@ -159,97 +153,69 @@ async function checkWallet(config: WalletConfig) {
             `${won ? '\ud83c\udf89 You won!' : '\ud83d\ude1e You lost.'} Position: ${(pos.amount || 0).toFixed(2)} SOL on ${pos.side}.\n` +
             (won ? `[Claim winnings](https://baozi.bet/my-bets)` : '')
           );
-        } catch { /* skip if resolution fetch fails */ }
+        } catch {
+          // Resolution check failed, skip
+        }
       }
     }
-
   } catch (err) {
-    console.error(`Error checking wallet ${address.slice(0, 8)}...:`, err);
+    console.error(`[${address.slice(0, 6)}] Alert check error:`, err);
   }
 
-  // Send alerts
+  // Send all messages
   for (const msg of messages) {
-    try {
-      await bot.sendMessage(chatId, msg, { parse_mode: 'Markdown', disable_web_page_preview: true });
-      await new Promise(r => setTimeout(r, 500)); // Rate limit
-    } catch (err) {
-      console.error(`Error sending alert to ${chatId}:`, err);
-    }
+    await bot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
   }
 
   return messages.length;
 }
 
-// ─── Commands ───
+// ─── Bot Commands ───
 
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, [
-    '\ud83d\udd14 *Baozi Claim & Alert Agent*',
-    '',
-    'Monitor your Baozi wallets for:',
-    '\u2022 Unclaimed winnings (claim reminders)',
-    '\u2022 Markets closing soon',
-    '\u2022 Significant odds shifts',
-    '\u2022 Market resolutions (win/loss)',
-    '',
-    '*Commands:*',
-    '/watch <wallet> — Start monitoring a wallet',
-    '/unwatch <wallet> — Stop monitoring',
-    '/status — Show monitored wallets',
-    '/check <wallet> — Manual check now',
-    '/config — View/edit alert settings',
-    '/help — This message',
-  ].join('\n'), { parse_mode: 'Markdown' });
+  bot.sendMessage(msg.chat.id,
+    `\ud83e\udd5f *Baozi Claim & Alert Agent*\n\n` +
+    `Monitor your Baozi prediction market positions.\n\n` +
+    `*Commands:*\n` +
+    `/watch <wallet> — Start monitoring a wallet\n` +
+    `/unwatch <wallet> — Stop monitoring\n` +
+    `/check <wallet> — Immediate check\n` +
+    `/config — Show current alert config`,
+    { parse_mode: 'Markdown' }
+  );
 });
 
-bot.onText(/\/watch\s+([A-Za-z0-9]{32,44})/, (msg, match) => {
-  const wallet = match?.[1] || '';
-  const chatId = msg.chat.id;
-
-  watchlist.set(wallet, {
-    address: wallet,
-    chatId,
-    alerts: {
-      claimable: true,
-      closingSoon: true,
-      closingSoonHours: 6,
-      oddsShift: true,
-      oddsShiftThreshold: 15,
-    },
-  });
-
-  bot.sendMessage(chatId, [
-    `\u2705 Now monitoring \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\``,
-    '',
-    'Default alerts: claimable \u2705, closing soon \u2705 (6h), odds shift \u2705 (15%)',
-    `Polling every ${POLL_INTERVAL / 60000} minutes.`,
-    '',
-    'Use /config to customize.',
-  ].join('\n'), { parse_mode: 'Markdown' });
-});
-
-bot.onText(/\/unwatch\s+([A-Za-z0-9]{32,44})/, (msg, match) => {
-  const wallet = match?.[1] || '';
-  watchlist.delete(wallet);
-  previousSnapshots.delete(wallet);
-  bot.sendMessage(msg.chat.id, `\u2705 Stopped monitoring \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\``);
-});
-
-bot.onText(/\/status/, (msg) => {
-  if (watchlist.size === 0) {
-    bot.sendMessage(msg.chat.id, 'No wallets being monitored. Use /watch <wallet> to start.');
+bot.onText(/\/watch (.+)/, (msg, match) => {
+  const wallet = match?.[1]?.trim() || '';
+  if (!wallet) {
+    bot.sendMessage(msg.chat.id, 'Usage: /watch <solana-wallet-address>');
     return;
   }
 
-  const lines = Array.from(watchlist.values()).map(w => 
-    `\u2022 \`${w.address.slice(0, 6)}...${w.address.slice(-4)}\``
-  );
+  watchlist.set(wallet, {
+    address: wallet,
+    chatId: msg.chat.id,
+    alerts: { claimable: true, closingSoon: true, closingSoonHours: 24, oddsShift: true, oddsShiftThreshold: 10 },
+  });
 
-  bot.sendMessage(msg.chat.id, `*Monitored Wallets:*\n${lines.join('\n')}\n\nPolling every ${POLL_INTERVAL / 60000} min.`, { parse_mode: 'Markdown' });
+  bot.sendMessage(msg.chat.id,
+    `\u2705 Watching \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\`\n` +
+    `Default alerts: claimable \u2705, closing soon \u2705 (24h), odds shift \u2705 (10%)`,
+    { parse_mode: 'Markdown' }
+  );
 });
 
-bot.onText(/\/check\s+([A-Za-z0-9]{32,44})/, async (msg, match) => {
-  const wallet = match?.[1] || '';
+bot.onText(/\/unwatch (.+)/, (msg, match) => {
+  const wallet = match?.[1]?.trim() || '';
+  if (watchlist.delete(wallet)) {
+    bot.sendMessage(msg.chat.id, `\u274c Stopped watching \`${wallet.slice(0, 6)}...\``, { parse_mode: 'Markdown' });
+  } else {
+    bot.sendMessage(msg.chat.id, 'Wallet not found in watchlist.');
+  }
+});
+
+bot.onText(/\/check (.+)/, async (msg, match) => {
+  const wallet = match?.[1]?.trim() || '';
   const chatId = msg.chat.id;
 
   bot.sendMessage(chatId, `\ud83d\udd0d Checking \`${wallet.slice(0, 6)}...${wallet.slice(-4)}\`...`);
