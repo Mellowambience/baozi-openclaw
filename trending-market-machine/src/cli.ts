@@ -47,7 +47,9 @@ async function main() {
     }
     case "help":
     default:
-      console.log("\nTrending Market Machine
+      console.log(`
+
+Trending Market Machine
 
 Commands:
   run    Single run (fetch trends, dedup, propose, create)
@@ -61,11 +63,12 @@ Env vars:
   MIN_CONFIDENCE        Minimum proposal confidence 0-100 (default: 50)
   MAX_PROPOSALS         Max proposals per run (default: 10)
   DEDUP_THRESHOLD       Similarity threshold for dedup 0-1 (default: 0.8)
-  WATCH_INTERVAL_MINUTES Interval for watch mode (default: 60)
+  WATCH_INTERVAL_MINUTESInterval for watch mode (default: 60)
 
 Real API keys (optional, stubs used if absent):
   TWITTER_BEARER_TOKEN, REDDIT_CLIENT_ID, LUNARCR_API_KEY
-");\n  }
+`);
+  }
 }
 
 main().catch(console.error);
