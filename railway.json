@@ -1,12 +1,4 @@
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
-  },
-  "deploy": {
-    "startCommand": "node dist/agent.js",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
-  }
-}
+ewogICIkc2NoZW1hIjogImh0dHBzOi8vcmFpbHdheS5hcHAvcmFpbHdheS5z
+Y2hlbWEuanNvbiIsCiAgImRlcGxveSI6IHsKICAgICJyZXN0YXJ0UG9saWN5
+VHlwZSI6ICJPTl9GQUlMVVJFIiwKICAgICJyZXN0YXJ0UG9saWN5TWF4UmV0
+cmllcyI6IDMKICB9Cn0K
