@@ -4,6 +4,7 @@
   "description": "AI Agent Recruiter — discovers, onboards, and tracks AI agents for Baozi prediction markets",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
