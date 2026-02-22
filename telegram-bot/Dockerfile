@@ -2,11 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY telegram-bot/package.json ./
+COPY package.json ./
 RUN npm install
 
-COPY telegram-bot/tsconfig.json ./
-COPY telegram-bot/src ./src
+COPY tsconfig.json ./
+COPY src ./src
 
 RUN npm run build
 
