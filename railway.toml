@@ -1,0 +1,8 @@
+[build]
+  builder = "dockerfile"
+  dockerfilePath = "trending-market-machine/Dockerfile"
+
+[deploy]
+  startCommand = "node dist/index.js"
+  healthcheckPath = "/health"
+  restartPolicyType = "on_failure"
