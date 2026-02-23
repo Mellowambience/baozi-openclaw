@@ -1,8 +1,8 @@
 FROM node:20-alpine
 WORKDIR /app
-COPY package*.json ./
+COPY trending-market-machine/package*.json ./
 RUN npm install --include=dev
-COPY . .
+COPY trending-market-machine/ .
 RUN npm run build
 EXPOSE 3000
 ENV NODE_ENV=production
