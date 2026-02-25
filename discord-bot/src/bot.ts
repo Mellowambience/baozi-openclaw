@@ -203,7 +203,7 @@ client.on('interactionCreate', async (interaction) => {
         if (category) params.category = category;
 
         const data = await fetchMarkets(params);
-        const markets = (data.markets || data || []).slice(0, 5);
+        const markets = (data.markets || []).slice(0, 5);
 
         if (markets.length === 0) {
           await interaction.editReply('No active markets found.');
@@ -257,7 +257,7 @@ client.on('interactionCreate', async (interaction) => {
       try {
         const wallet = interaction.options.getString('wallet', true);
         const data = await fetchPositions(wallet);
-        const positions = data.positions || data || [];
+        const positions = data.positions || [];
 
         if (positions.length === 0) {
           await interaction.editReply('No positions found for this wallet.');
@@ -283,7 +283,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply();
       try {
         const data = await fetchMarkets({ status: 'Active', sort: 'volume', order: 'desc' });
-        const markets = (data.markets || data || []).slice(0, 5);
+        const markets = (data.markets || []).slice(0, 5);
 
         if (markets.length === 0) {
           await interaction.editReply('No hot markets right now.');
@@ -302,7 +302,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply();
       try {
         const data = await fetchMarkets({ status: 'Active', sort: 'closing', order: 'asc' });
-        const markets = (data.markets || data || [])
+        const markets = (data.markets || [])
           .filter((m: any) => {
             if (!m.closingTime) return false;
             const ms = new Date(m.closingTime).getTime() - Date.now();
@@ -391,7 +391,7 @@ setInterval(async () => {
       if (!channel?.isTextBased()) continue;
 
       const data = await fetchMarkets({ status: 'Active', sort: 'volume', order: 'desc' });
-      const markets = (data.markets || data || []).slice(0, 5);
+      const markets = (data.markets || []).slice(0, 5);
 
       if (markets.length === 0) continue;
 
