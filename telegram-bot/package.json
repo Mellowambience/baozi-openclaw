@@ -10,11 +10,10 @@
   },
   "dependencies": {
     "node-telegram-bot-api": "^0.66.0",
-    "typescript": "^5.7.0"
-  },
-  "devDependencies": {
+    "typescript": "^5.7.0",
     "@types/node": "^22.0.0",
     "@types/node-telegram-bot-api": "^0.64.0",
     "ts-node": "^10.9.0"
-  }
+  },
+  "devDependencies": {}
 }
